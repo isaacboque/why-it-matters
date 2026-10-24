@@ -14,9 +14,10 @@ Built for the Microsoft × Premier League **Inside the Game: Developer Hackathon
 | --- | --- | --- |
 | Ingest | Seeded synthetic simulator with ground truth | done |
 | Interpret | Match Pulse engine (control/chaos, PPDA, field tilt, rhythm) | done |
-| Explain | Agent team: Analyst, Explainer, Verifier, Producer, Personalizer | planned |
-| Render | Studio view, fan view, overlay cue API, recap | planned |
-| Personalize | Analyst / fan / player-focus modes, EN · ES · CA | planned |
+| Explain | Agent team: Blackboard, Analyst, Explainer, Verifier, Producer, Recap, orchestrator + event bus (offline, deterministic) | done |
+| Render | Overlay cue JSON with on-air budget, full-time recap | done |
+| Render | Studio view, fan view, API | planned |
+| Personalize | Analyst / fan / player-focus modes, EN · ES · CA, re-verified | done |
 
 See [SPEC.md](SPEC.md) for the problem, users, success criteria and architecture.
 
@@ -30,6 +31,15 @@ The simulator plants known answers (who controls the game, when it turns to chao
 
 CI fails if any of these drop below target.
 
+The agent team is scored on seeds 0–19 (offline template generator):
+
+| Measure | Result |
+| --- | --- |
+| Truth Score (claims passing the Verifier) | 1.00 |
+| Truth Score with a model that mis-states 30 % of first drafts | 0.91 raw; first-draft accuracy 0.65; every retry recovers; on-air accuracy 1.00 |
+| Cues per match | 11.9 (6–16); goals always air |
+| Latency per insight | 1.4 ms mean, 16 ms max; a whole match runs in under 0.1 s |
+
 ## Quick start
 
 ```bash
@@ -37,6 +47,7 @@ pip install -e ".[dev]"
 python -m whyitmatters.simulator --seed 7 --out match.jsonl   # generate a match
 python -m whyitmatters.pulse match.jsonl                        # replay it through the Match Pulse engine
 python -m whyitmatters.eval --seeds 20                          # detection quality vs ground truth
+python -m whyitmatters.agents --seed 7 --mode fan --lang ca     # the agent team on a match (add --faults 0.3 to see the Verifier work)
 pytest
 ```
 
