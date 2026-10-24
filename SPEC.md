@@ -29,14 +29,20 @@ The simulator also writes **ground truth**: the scripted phases (`home_control`,
 
 ## Success criteria
 
-| Measure | Target |
-| --- | --- |
-| Phase-shift detection recall (±4 min) | ≥ 0.75 across 20 seeds |
-| Phase-shift detection precision (±4 min) | ≥ 0.6 across 20 seeds |
-| Minute-level state accuracy | ≥ 0.65 |
-| Truth Score (claims passing the Verifier) | reported live; target ≥ 0.95 after retries |
-| Insight latency (event → cue) | < 2 s offline, < 6 s with a hosted model |
-| Realism | per match: 800–1,200 passes, 18–35 shots, pass completion 75–90 % |
+Detection is tuned on seeds 0–39 and scored on held-out seeds 1000+ (`python -m whyitmatters.eval --seeds 20 --check`, run in CI).
+
+| Measure | Target | Held-out result (20 matches) |
+| --- | --- | --- |
+| Phase-shift detection recall (±4 min, correct new state) | ≥ 0.75 | 0.90 |
+| Phase-shift detection precision (±4 min, correct new state) | ≥ 0.60 | 0.69 |
+| Timeline accuracy (state history with back-dated changes) | ≥ 0.75 | 0.84 |
+| Live state accuracy (what the studio sees that minute) | reported | 0.56 |
+| Detection lag (true shift → confirmed) | reported | 5.7 min |
+| Truth Score (claims passing the Verifier) | ≥ 0.95 after retries | not built yet |
+| Insight latency (event → cue) | < 2 s offline, < 6 s hosted model | not built yet |
+| Realism per match | 900–1,300 passes, 12–40 shots, 70–90 % completion | ~1,090 passes, ~22 shots, ~80 %, ~2.1 goals |
+
+Known limitation: a shift is confirmed about 5–6 minutes after it starts, because a state needs a 5-minute window and 3 confirming minutes to avoid false alarms. Live claims therefore say "over the last five minutes", and the recap back-dates each shift to its estimated start.
 
 ## Non-goals
 
