@@ -144,3 +144,12 @@ def test_web_ui_is_served(client):
     assert r.status_code == 200 and "WhyItMatters" in r.text
     assert client.get("/app.js").status_code == 200
     assert client.get("/style.css").status_code == 200
+
+
+def test_web_theme_palette_and_short_names(client):
+    css = client.get("/style.css").text
+    for colour in ("#37003c", "#00ff85", "#e90052", "#04f5ff"):
+        assert colour in css
+    assert "short_name" in client.get("/app.js").text
+    info = client.get(f"/matches/{SEED}").json()
+    assert info["home"]["short_name"] and info["away"]["short_name"]
