@@ -18,7 +18,11 @@ class RecapWriter:
         self.verifier = verifier or Verifier()
 
     def run(
-        self, state: Blackboard, aired: list[Cue], mode: Mode = "analyst", lang: Lang = "en",
+        self,
+        state: Blackboard,
+        aired: list[Cue],
+        mode: Mode = "analyst",
+        lang: Lang = "en",
         personalize=None,
     ) -> Recap:
         last = state.last_event
@@ -28,17 +32,33 @@ class RecapWriter:
         w = state.pulse.counter.window(last.minute, last.minute + 1)
         xg_h, xg_a = round(state.team_xg["home"], 2), round(state.team_xg["away"], 2)
 
-        top = "home" if w.home.possession_share >= w.away.possession_share else "away"
         claims = [
             Claim(key="sh", metric="score_home", unit="count", value=sh, event_id=last.id),
             Claim(key="sa", metric="score_away", unit="count", value=sa, event_id=last.id),
-            Claim(key="poss", metric="possession_share", unit="share", side=top,
-                  value=(w.home if top == "home" else w.away).possession_share, window=full,
-                  tolerance=0.006),
-            Claim(key="xg_h", metric="team_xg", unit="xg", side="home", value=xg_h,
-                  tolerance=0.006),
-            Claim(key="xg_a", metric="team_xg", unit="xg", side="away", value=xg_a,
-                  tolerance=0.006),
+            Claim(
+                key="poss_h",
+                metric="possession_share",
+                unit="share",
+                side="home",
+                value=w.home.possession_share,
+                window=full,
+                tolerance=0.006,
+            ),
+            Claim(
+                key="poss_a",
+                metric="possession_share",
+                unit="share",
+                side="away",
+                value=w.away.possession_share,
+                window=full,
+                tolerance=0.006,
+            ),
+            Claim(
+                key="xg_h", metric="team_xg", unit="xg", side="home", value=xg_h, tolerance=0.006
+            ),
+            Claim(
+                key="xg_a", metric="team_xg", unit="xg", side="away", value=xg_a, tolerance=0.006
+            ),
         ]
         names = {"home": state.team_name("home"), "away": state.team_name("away")}
         if sh == sa:
@@ -49,8 +69,7 @@ class RecapWriter:
             winner, loser = names[win_side], names[lose_side]
             created_more = state.team_xg[win_side] >= state.team_xg[lose_side]
             verdict = "verdict_deserved" if created_more else "verdict_robbery"
-        slots = {**names, "team": names[top], "verdict": verdict, "winner": winner,
-                 "loser": loser}
+        slots = {**names, "verdict": verdict, "winner": winner, "loser": loser}
         headline, summary = self.generator.render("recap", mode, lang, slots, claims)
 
         ranked = sorted(aired, key=lambda c: (-_weight(c), c.t_in))[:RECAP_MOMENTS]
@@ -63,10 +82,19 @@ class RecapWriter:
                 h, b = pc.headline, pc.body
             else:
                 h, b = cue.headline, cue.body
-            moments.append(RecapMoment(minute=cue.minute, headline=h, body=b,
-                                       evidence_event_ids=cue.evidence_event_ids))
-        return Recap(headline=headline, score_home=sh, score_away=sa, summary=summary,
-                     moments=moments, claims=claims)
+            moments.append(
+                RecapMoment(
+                    minute=cue.minute, headline=h, body=b, evidence_event_ids=cue.evidence_event_ids
+                )
+            )
+        return Recap(
+            headline=headline,
+            score_home=sh,
+            score_away=sa,
+            summary=summary,
+            moments=moments,
+            claims=claims,
+        )
 
 
 def _weight(cue: Cue) -> float:

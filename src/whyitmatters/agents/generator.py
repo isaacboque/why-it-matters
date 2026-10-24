@@ -50,84 +50,127 @@ class TextGenerator(Protocol):
 T: dict[str, dict[str, dict[str, tuple[str, str]]]] = {
     "shift_control": {
         "analyst": {
-            "en": ("{team} take control",
-                   "{team} have had {#poss} of the ball over the last {#win} minutes and "
-                   "complete {#comp} of their passes. {other} can't get out."),
-            "es": ("{team} toma el control",
-                   "{team} ha tenido el {#poss} del balón en los últimos {#win} minutos y "
-                   "completa el {#comp} de sus pases. {other} no consigue salir."),
-            "ca": ("{team} pren el control",
-                   "{team} ha tingut el {#poss} de la pilota en els últims {#win} minuts i "
-                   "completa el {#comp} de les passades. {other} no aconsegueix sortir."),
+            "en": (
+                "{team} take control",
+                "{team} have had {#poss} of the ball over the last {#win} minutes and "
+                "complete {#comp} of their passes. {other} can't get out.",
+            ),
+            "es": (
+                "{team} toma el control",
+                "{team} ha tenido el {#poss} del balón en los últimos {#win} minutos y "
+                "completa el {#comp} de sus pases. {other} no consigue salir.",
+            ),
+            "ca": (
+                "{team} pren el control",
+                "{team} ha tingut el {#poss} de la pilota en els últims {#win} minuts i "
+                "completa el {#comp} de les passades. {other} no aconsegueix sortir.",
+            ),
         },
         "fan": {
-            "en": ("{team} are on top",
-                   "{team} have taken over: they've had the ball {#poss} of the time "
-                   "in the last {#win} minutes."),
-            "es": ("{team} manda",
-                   "{team} se ha hecho con el partido: ha tenido el balón el {#poss} "
-                   "del tiempo en los últimos {#win} minutos."),
-            "ca": ("{team} mana",
-                   "{team} s'ha fet amb el partit: ha tingut la pilota el {#poss} "
-                   "del temps en els últims {#win} minuts."),
+            "en": (
+                "{team} are on top",
+                "{team} have taken over: they've had the ball {#poss} of the time "
+                "in the last {#win} minutes.",
+            ),
+            "es": (
+                "{team} manda",
+                "{team} se ha hecho con el partido: ha tenido el balón el {#poss} "
+                "del tiempo en los últimos {#win} minutos.",
+            ),
+            "ca": (
+                "{team} mana",
+                "{team} s'ha fet amb el partit: ha tingut la pilota el {#poss} "
+                "del temps en els últims {#win} minuts.",
+            ),
         },
     },
     "shift_chaos": {
         "analyst": {
-            "en": ("The game has broken open",
-                   "{#turn} turnovers a minute over the last {#win} minutes: neither side can "
-                   "keep the ball. Expect chances at both ends."),
-            "es": ("El partido se ha roto",
-                   "{#turn} pérdidas por minuto en los últimos {#win} minutos: nadie retiene "
-                   "el balón. Habrá ocasiones en las dos áreas."),
-            "ca": ("El partit s'ha trencat",
-                   "{#turn} pèrdues per minut en els últims {#win} minuts: ningú reté la "
-                   "pilota. Hi haurà ocasions a les dues àrees."),
+            "en": (
+                "The game has broken open",
+                "{#turn} turnovers a minute over the last {#win} minutes: neither side can "
+                "keep the ball. Expect chances at both ends.",
+            ),
+            "es": (
+                "El partido se ha roto",
+                "{#turn} pérdidas por minuto en los últimos {#win} minutos: nadie retiene "
+                "el balón. Habrá ocasiones en las dos áreas.",
+            ),
+            "ca": (
+                "El partit s'ha trencat",
+                "{#turn} pèrdues per minut en els últims {#win} minuts: ningú reté la "
+                "pilota. Hi haurà ocasions a les dues àrees.",
+            ),
         },
         "fan": {
-            "en": ("End to end now!",
-                   "Nobody can keep the ball: it's changing hands {#turn} times a minute. "
-                   "Anything can happen."),
-            "es": ("¡Ahora es un ida y vuelta!",
-                   "Nadie se queda el balón: cambia de manos {#turn} veces por minuto. "
-                   "Puede pasar cualquier cosa."),
-            "ca": ("Ara és un anar i tornar!",
-                   "Ningú es queda la pilota: canvia de mans {#turn} vegades per minut. "
-                   "Pot passar qualsevol cosa."),
+            "en": (
+                "End to end now!",
+                "Nobody can keep the ball: it's changing hands {#turn} times a minute. "
+                "Anything can happen.",
+            ),
+            "es": (
+                "¡Ahora es un ida y vuelta!",
+                "Nadie se queda el balón: cambia de manos {#turn} veces por minuto. "
+                "Puede pasar cualquier cosa.",
+            ),
+            "ca": (
+                "Ara és un anar i tornar!",
+                "Ningú es queda la pilota: canvia de mans {#turn} vegades per minut. "
+                "Pot passar qualsevol cosa.",
+            ),
         },
     },
     "shift_balanced": {
         "analyst": {
-            "en": ("Control is up for grabs",
-                   "Neither side is in control any more: possession {#poss_h} to {#poss_a} "
-                   "over the last {#win} minutes, with no clear edge in passing either."),
-            "es": ("El control está en el aire",
-                   "Ya nadie manda: posesión {#poss_h} a {#poss_a} en los últimos {#win} "
-                   "minutos y sin ventaja clara en el pase."),
-            "ca": ("El control és a l'aire",
-                   "Ja no mana ningú: possessió {#poss_h} a {#poss_a} en els últims {#win} "
-                   "minuts i sense avantatge clar en la passada."),
+            "en": (
+                "Control is up for grabs",
+                "Neither side is in control any more. Possession over the last {#win} "
+                "minutes: {home} {#poss_h}, {away} {#poss_a}. No clear edge in passing "
+                "either.",
+            ),
+            "es": (
+                "El control está en el aire",
+                "Ya nadie manda. Posesión en los últimos {#win} minutos: {home} {#poss_h}, "
+                "{away} {#poss_a}. Sin ventaja clara en el pase.",
+            ),
+            "ca": (
+                "El control és a l'aire",
+                "Ja no mana ningú. Possessió en els últims {#win} minuts: {home} {#poss_h}, "
+                "{away} {#poss_a}. Sense avantatge clar en la passada.",
+            ),
         },
         "fan": {
-            "en": ("Nobody's in charge now",
-                   "The game has settled: {#poss_h} against {#poss_a} of the ball in the last "
-                   "{#win} minutes and neither team on top."),
-            "es": ("Ahora no manda nadie",
-                   "El partido se ha calmado: {#poss_h} contra {#poss_a} de posesión en los "
-                   "últimos {#win} minutos y nadie por encima."),
-            "ca": ("Ara no mana ningú",
-                   "El partit s'ha calmat: {#poss_h} contra {#poss_a} de possessió en els "
-                   "últims {#win} minuts i ningú per sobre."),
+            "en": (
+                "Nobody's in charge now",
+                "The game has settled. Ball over the last {#win} minutes: {home} "
+                "{#poss_h}, {away} {#poss_a}. Neither team on top.",
+            ),
+            "es": (
+                "Ahora no manda nadie",
+                "El partido se ha calmado. Balón en los últimos {#win} minutos: {home} "
+                "{#poss_h}, {away} {#poss_a}. Nadie por encima.",
+            ),
+            "ca": (
+                "Ara no mana ningú",
+                "El partit s'ha calmat. Pilota en els últims {#win} minuts: {home} "
+                "{#poss_h}, {away} {#poss_a}. Ningú per sobre.",
+            ),
         },
     },
     "goal": {
         "analyst": {
-            "en": ("GOAL {home} {#sh}–{#sa} {away}",
-                   "{player} scores from a chance worth {#xg} xG. {flow}"),
-            "es": ("GOL {home} {#sh}–{#sa} {away}",
-                   "{player} marca en una ocasión de {#xg} xG. {flow}"),
-            "ca": ("GOL {home} {#sh}–{#sa} {away}",
-                   "{player} marca en una ocasió de {#xg} xG. {flow}"),
+            "en": (
+                "GOAL {home} {#sh}–{#sa} {away}",
+                "{player} scores from a chance worth {#xg} xG. {flow}",
+            ),
+            "es": (
+                "GOL {home} {#sh}–{#sa} {away}",
+                "{player} marca en una ocasión de {#xg} xG. {flow}",
+            ),
+            "ca": (
+                "GOL {home} {#sh}–{#sa} {away}",
+                "{player} marca en una ocasió de {#xg} xG. {flow}",
+            ),
         },
         "fan": {
             "en": ("GOAL! {player}!", "{team} score! It's {home} {#sh}–{#sa} {away}. {flow}"),
@@ -137,46 +180,63 @@ T: dict[str, dict[str, dict[str, tuple[str, str]]]] = {
     },
     "big_chance": {
         "analyst": {
-            "en": ("Big chance for {team}",
-                   "{player} misses a {#xg} xG chance: shots like that go in {#xgpct} of "
-                   "the time."),
-            "es": ("Ocasión clara de {team}",
-                   "{player} falla una ocasión de {#xg} xG: tiros así acaban en gol el "
-                   "{#xgpct} de las veces."),
-            "ca": ("Ocasió clara de {team}",
-                   "{player} falla una ocasió de {#xg} xG: xuts així acaben en gol el "
-                   "{#xgpct} de les vegades."),
+            "en": (
+                "Big chance for {team}",
+                "{player} misses a {#xg} xG chance: shots like that go in {#xgpct} of the time.",
+            ),
+            "es": (
+                "Ocasión clara de {team}",
+                "{player} falla una ocasión de {#xg} xG: tiros así acaban en gol el "
+                "{#xgpct} de las veces.",
+            ),
+            "ca": (
+                "Ocasió clara de {team}",
+                "{player} falla una ocasió de {#xg} xG: xuts així acaben en gol el "
+                "{#xgpct} de les vegades.",
+            ),
         },
         "fan": {
-            "en": ("So close!", "{player} should have scored: chances like that go in "
-                                "{#xgpct} of the time."),
-            "es": ("¡Uy, casi!", "{player} tenía que marcar: ocasiones así entran el "
-                                 "{#xgpct} de las veces."),
-            "ca": ("Uf, per poc!", "{player} havia de marcar: ocasions així entren el "
-                                   "{#xgpct} de les vegades."),
+            "en": (
+                "So close!",
+                "{player} should have scored: chances like that go in {#xgpct} of the time.",
+            ),
+            "es": (
+                "¡Uy, casi!",
+                "{player} tenía que marcar: ocasiones así entran el {#xgpct} de las veces.",
+            ),
+            "ca": (
+                "Uf, per poc!",
+                "{player} havia de marcar: ocasions així entren el {#xgpct} de les vegades.",
+            ),
         },
     },
     "top_speed": {
         "analyst": {
-            "en": ("{player}: fastest run of the match",
-                   "{player} carries the ball at {#kmh} km/h, the top speed recorded so far."),
-            "es": ("{player}: la conducción más rápida",
-                   "{player} conduce a {#kmh} km/h, la velocidad máxima del partido."),
-            "ca": ("{player}: la conducció més ràpida",
-                   "{player} condueix a {#kmh} km/h, la velocitat màxima del partit."),
+            "en": (
+                "{player}: fastest run of the match",
+                "{player} carries the ball at {#kmh} km/h, the top speed recorded so far.",
+            ),
+            "es": (
+                "{player}: la conducción más rápida",
+                "{player} conduce a {#kmh} km/h, la velocidad máxima del partido.",
+            ),
+            "ca": (
+                "{player}: la conducció més ràpida",
+                "{player} condueix a {#kmh} km/h, la velocitat màxima del partit.",
+            ),
         },
         "fan": {
             "en": ("Rapid!", "{player} just flew past at {#kmh} km/h, the fastest of the match."),
-            "es": ("¡Un cohete!", "{player} acaba de volar a {#kmh} km/h, lo más rápido "
-                                  "del partido."),
-            "ca": ("Un coet!", "{player} acaba de volar a {#kmh} km/h, el més ràpid "
-                               "del partit."),
+            "es": (
+                "¡Un cohete!",
+                "{player} acaba de volar a {#kmh} km/h, lo más rápido del partido.",
+            ),
+            "ca": ("Un coet!", "{player} acaba de volar a {#kmh} km/h, el més ràpid del partit."),
         },
     },
     "pass_master": {
         "analyst": {
-            "en": ("{player} is running the game",
-                   "{player} has completed {#n} passes so far."),
+            "en": ("{player} is running the game", "{player} has completed {#n} passes so far."),
             "es": ("{player} dirige el juego", "{player} ya ha completado {#n} pases."),
             "ca": ("{player} dirigeix el joc", "{player} ja ha completat {#n} passades."),
         },
@@ -188,13 +248,21 @@ T: dict[str, dict[str, dict[str, tuple[str, str]]]] = {
     },
     "recap": {
         "analyst": {
-            "en": ("Full time: {home} {#sh}–{#sa} {away}",
-                   "{team} had {#poss} of the ball and created {#xg_h} xG to {#xg_a}. {verdict}"),
-            "es": ("Final: {home} {#sh}–{#sa} {away}",
-                   "{team} tuvo el {#poss} del balón y generó {#xg_h} xG por {#xg_a}. {verdict}"),
-            "ca": ("Final: {home} {#sh}–{#sa} {away}",
-                   "{team} va tenir el {#poss} de la pilota i va generar {#xg_h} xG per "
-                   "{#xg_a}. {verdict}"),
+            "en": (
+                "Full time: {home} {#sh}–{#sa} {away}",
+                "Possession: {home} {#poss_h}, {away} {#poss_a}. Expected goals: {home} "
+                "{#xg_h}, {away} {#xg_a}. {verdict}",
+            ),
+            "es": (
+                "Final: {home} {#sh}–{#sa} {away}",
+                "Posesión: {home} {#poss_h}, {away} {#poss_a}. Goles esperados: {home} "
+                "{#xg_h}, {away} {#xg_a}. {verdict}",
+            ),
+            "ca": (
+                "Final: {home} {#sh}–{#sa} {away}",
+                "Possessió: {home} {#poss_h}, {away} {#poss_a}. Gols esperats: {home} "
+                "{#xg_h}, {away} {#xg_a}. {verdict}",
+            ),
         },
         "fan": {
             "en": ("Full time: {home} {#sh}–{#sa} {away}", "{verdict}"),

@@ -203,5 +203,5 @@ class TrustStats(BaseModel):
             "claims_verified": self.claims_verified,
             "retries": self.retries,
             "dropped": self.dropped,
-            "on_air_accuracy": 1.0,  # nothing reaches air unverified, by construction
+            "on_air_accuracy": 1.0,  # nothing airs unverified; the end-of-match audit re-checks
         }

@@ -34,6 +34,7 @@ class Blackboard:
         }
         self.stats: dict[str, PlayerStats] = {pid: PlayerStats() for pid in self.players}
         self.events: dict[str, Event] = {}
+        self.log: list[Event] = []  # raw stream in arrival order; the Verifier replays this
         self.team_xg: dict[Side, float] = {"home": 0.0, "away": 0.0}
         self.team_xg_at: dict[str, dict[Side, float]] = {}
         self.score: dict[Side, int] = {"home": 0, "away": 0}
@@ -43,6 +44,7 @@ class Blackboard:
     # ------------------------------------------------------------------ ingest
     def ingest(self, ev: Event) -> list[PulseOutput]:
         self.events[ev.id] = ev
+        self.log.append(ev)
         self.last_event = ev
         st = self.stats.get(ev.player_id or "")
         if ev.type == EventType.PASS and st is not None:
