@@ -29,8 +29,13 @@ const I18N = {
 const METRICS = {
   possession_share: "Possession", pass_completion: "Pass completion", field_tilt: "Field tilt",
   turnovers_per_min: "Turnovers per minute", window_minutes: "Window (minutes)", shot_xg: "Shot xG",
-  score_home: "Home goals", score_away: "Away goals", player_completed_passes: "Completed passes",
+  score_home: "Score (home)", score_away: "Score (away)", player_completed_passes: "Completed passes",
   carry_speed_kmh: "Carry speed (km/h)", team_xg: "Team xG",
+};
+const UNITS = {
+  possession_share: "share", pass_completion: "share", field_tilt: "share", turnovers_per_min: "rate",
+  window_minutes: "minutes", shot_xg: "xg", team_xg: "xg", score_home: "count", score_away: "count",
+  player_completed_passes: "count", carry_speed_kmh: "kmh",
 };
 const KINDS = { goal: "goal", state_shift: "shift", big_chance: "chance", top_speed: "speed", pass_master: "passing" };
 
@@ -60,6 +65,16 @@ function fmtVal(unit, v) {
 }
 const T = () => I18N[S.viewer.lang] || I18N.en;
 const teamName = (side) => (S.info ? S.info[side].name : side === "home" ? "Home" : "Away");
+const teamShort = (side) => (S.info ? S.info[side].short_name || S.info[side].name : side === "home" ? "HOM" : "AWY");
+
+// "turnovers_per_min stated 4.7 but match state says 3.2" -> "Turnovers per minute: stated 4.7, match state 3.2"
+function humanReason(r) {
+  const m = /^(\w+) stated (-?[\d.]+) but match state says (-?[\d.]+)$/.exec(r);
+  if (!m) return r;
+  const unit = UNITS[m[1]];
+  return `${METRICS[m[1]] || m[1]}: stated ${fmtVal(unit, +m[2])}, match state ${fmtVal(unit, +m[3])}`;
+}
+const failureList = (v) => [...v.failures.map(humanReason), ...v.unsupported_numbers.map((n) => `unsupported number ${n}`)].join("; ");
 
 // ----------------------------------------------------------------------------- stream
 function openStream() {
@@ -153,9 +168,10 @@ function scoreboardHtml(lang) {
   const t = I18N[lang] || I18N.en;
   const clk = S.ended ? t.full : S.matchT ? `${Math.floor(S.matchT / 60)}'` : t.kickoff;
   const btn = S.ended && S.recap ? `<button data-recap>${esc(t.recap)}</button>` : "";
-  return `<span class="team"><span class="swatch home"></span>${esc(teamName("home"))}</span>
+  const nm = (side) => `<span class="full">${esc(teamName(side))}</span><span class="short">${esc(teamShort(side))}</span>`;
+  return `<span class="team"><span class="swatch home"></span>${nm("home")}</span>
     <span class="score">${S.score[0]} – ${S.score[1]}</span>
-    <span class="team">${esc(teamName("away"))}<span class="swatch away"></span></span>
+    <span class="team">${nm("away")}<span class="swatch away"></span></span>
     <span class="clock">${esc(clk)}</span>${btn}`;
 }
 function renderScoreboards() {
@@ -202,15 +218,15 @@ function openWhy(id) {
       <td>${esc(ev.type)}</td><td>${esc(ev.player || teamName(ev.side))}</td>
       <td>${esc(ev.outcome || "")}${ev.xg != null ? ` · ${ev.xg.toFixed(2)} xG` : ""}</td></tr>`).join("");
   const history = w.history.map((h) => `<li>Draft ${h.attempt}: ${h.ok
-      ? '<b style="color:var(--ok)">verified</b>'
-      : `<b style="color:var(--bad)">rejected</b> — ${esc([...h.failures, ...h.unsupported_numbers.map((n) => `unsupported number ${n}`)].join("; "))}`}</li>`).join("");
+      ? '<b style="color:var(--ok-ink)">verified</b>'
+      : `<b style="color:var(--bad)">rejected</b> — ${esc(failureList(h))}`}</li>`).join("");
   $("why-body").innerHTML = `
     <button class="close" data-close>Close</button>
     <h2>${c.minute}' · ${esc(KINDS[c.kind] || c.kind)}</h2>
     <h3 style="margin:6px 0">${esc(c.headline)}</h3><p>${esc(c.body)}</p>
     <h2>What the Verifier checked</h2>
     <table><tr><th>Claim</th><th>Stated</th><th>Match state</th><th></th></tr>${claims}</table>
-    <h2>Evidence</h2>
+    <h2>Key events in this window</h2>
     <table><tr><th>Event</th><th>Min</th><th>Type</th><th>Who</th><th>Result</th></tr>${evidence}</table>
     <h2>Drafting</h2><ul>${history}</ul>
     <p class="legend">Recomputed from the raw event stream · ${w.attempts} draft${w.attempts > 1 ? "s" : ""} · ${w.latency_ms.toFixed(1)} ms to verify and publish · on screen ${clock(c.t_in)}–${clock(c.t_out)}</p>`;
@@ -276,8 +292,9 @@ function renderFan() {
 }
 
 // ----------------------------------------------------------------------------- trust panel
-function stat(label, value, note = "", good = false) {
-  return `<div class="stat ${good ? "good" : ""}"><div class="l">${esc(label)}</div><div class="v">${esc(value)}</div><div class="n">${esc(note)}</div></div>`;
+const BENCH = "Benchmark: 20 held-out matches";
+function stat(label, value, note = "", good = false, bench = "") {
+  return `<div class="stat ${good ? "good" : ""}">${bench ? `<div class="bench">${esc(bench)}</div>` : ""}<div class="l">${esc(label)}</div><div class="v">${esc(value)}</div><div class="n">${esc(note)}</div></div>`;
 }
 function renderTrust() {
   const tr = S.trust || { truth_score: 1, claims_generated: 0, claims_verified: 0, claims_rejected: 0, retries: 0, dropped: 0, first_draft_accuracy: 1, latency_ms_mean: 0, latency_ms_p95: 0, insights: 0, cues: 0 };
@@ -293,15 +310,15 @@ function renderTrust() {
     stat("Dropped", tr.dropped, "never passed verification"),
     stat("Insight latency", `${tr.latency_ms_mean.toFixed(1)} ms`, `p95 ${tr.latency_ms_p95.toFixed(1)} ms`),
     stat("Insights → cues", `${tr.insights} → ${tr.cues}`, "on-air budget: 3 per 5 min, goals always air"),
-    stat("Shift recall", ev ? pct(ev.recall) : "—", "vs planted ground truth (20 held-out matches)"),
-    stat("Shift precision", ev ? pct(ev.precision) : "—", "±4 min, correct new state"),
-    stat("Timeline accuracy", ev ? pct(ev.timeline_accuracy) : "—", ev ? `detection lag ${ev.mean_detection_lag_min} min` : ""),
+    stat("Shift recall", ev ? pct(ev.recall) : "—", "vs planted ground truth", false, BENCH),
+    stat("Shift precision", ev ? pct(ev.precision) : "—", "±4 min, correct new state", false, BENCH),
+    stat("Timeline accuracy", ev ? pct(ev.timeline_accuracy) : "—", ev ? `detection lag ${ev.mean_detection_lag_min} min` : "", false, BENCH),
   ].join("");
 }
 function renderVerdicts() {
   const rows = S.verdicts.filter((v) => !v.ok).slice(-12).reverse();
   $("verdicts").innerHTML = rows.length
-    ? rows.map((v) => `<div class="verdict bad"><b>${esc(v.kind)}</b> draft ${v.attempt} rejected: ${esc([...v.failures, ...v.unsupported_numbers.map((n) => `unsupported number ${n}`)].join("; "))}</div>`).join("")
+    ? rows.map((v) => `<div class="verdict bad"><b>${esc(v.kind)}</b> draft ${v.attempt} rejected: ${esc(failureList(v))}</div>`).join("")
     : `<div class="empty">No draft has been rejected. Tick “Unreliable model” and kick off again to watch the Verifier work.</div>`;
 }
 
@@ -315,7 +332,7 @@ function showRecap() {
     <button class="close" data-close>${esc(t.close)}</button>
     <h2>${esc(t.full)}</h2>
     <div class="final">${esc(teamName("home"))} ${r.score_home} – ${r.score_away} ${esc(teamName("away"))}</div>
-    <p><b>${esc(r.headline)}</b></p><p>${esc(r.summary)}</p>
+    <p>${esc(r.summary)}</p>
     <h2>${esc(t.moments)}</h2>
     <ol>${r.moments.map((m) => `<li><b>${m.minute}'</b> ${esc(m.headline)}<br><span class="legend">${esc(m.body)}</span></li>`).join("")}</ol>`;
   if (!$("recap").open) $("recap").showModal();
@@ -335,6 +352,20 @@ function drawPitch() {
   const [ctx, W, H, dpr] = fit($("pitch"));
   ctx.clearRect(0, 0, W, H);
   const sx = W / 105, sy = H / 68;
+  // faint territory tint per third from the latest window: home attacks right, away attacks left
+  const last = S.pulses[S.pulses.length - 1];
+  if (last) {
+    const tint = (x0, x1, color, a) => {
+      if (a <= 0) return;
+      ctx.globalAlpha = Math.min(0.4, a); ctx.fillStyle = color; ctx.fillRect(x0 * sx, 0, (x1 - x0) * sx, H);
+    };
+    const tiltEdge = (last.home.field_tilt - 0.5) * 1.2;      // > 0: home pins away in their third
+    const possEdge = (last.home.possession_share - 0.5) * 0.8; // > 0: home owns the middle
+    tint(70, 105, css("--home"), tiltEdge);
+    tint(0, 35, css("--away"), -tiltEdge);
+    tint(35, 70, possEdge >= 0 ? css("--home") : css("--away"), Math.abs(possEdge));
+    ctx.globalAlpha = 1;
+  }
   ctx.strokeStyle = css("--pitch-line"); ctx.lineWidth = 1.5 * dpr;
   const rect = (x, y, w, h) => ctx.strokeRect(x * sx, y * sy, w * sx, h * sy);
   rect(0.5, 0.5, 104, 67);
@@ -345,7 +376,7 @@ function drawPitch() {
 
   const home = css("--home"), away = css("--away");
   const at = (ev, x, y) => (ev.side === "away" ? [(105 - x) * sx, (68 - y) * sy] : [x * sx, y * sy]);
-  const recent = S.events.filter((e) => !["kick_off", "half_end"].includes(e.type)).slice(-14);
+  const recent = S.events.filter((e) => !["kick_off", "half_end"].includes(e.type)).slice(-25);
   recent.forEach((ev, i) => {
     const a = (i + 1) / recent.length;
     const col = ev.side === "home" ? home : away;
@@ -396,9 +427,12 @@ function drawPulse() {
     area(true, css("--home")); area(false, css("--away"));
     ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.strokeStyle = css("--ink"); ctx.lineWidth = 1.5 * dpr; ctx.stroke();
-    ctx.beginPath();
-    S.pulses.forEach((p, i) => { const x = X(p.minute + 1), y = H - 14 * dpr - p.chaos * (H - 30 * dpr); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-    ctx.strokeStyle = css("--chaos"); ctx.lineWidth = 2 * dpr; ctx.stroke();
+    const chaosPath = () => {
+      ctx.beginPath();
+      S.pulses.forEach((p, i) => { const x = X(p.minute + 1), y = H - 14 * dpr - p.chaos * (H - 30 * dpr); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    };
+    chaosPath(); ctx.strokeStyle = css("--primary"); ctx.lineWidth = 4.5 * dpr; ctx.stroke(); // dark casing: cyan alone is faint on light
+    chaosPath(); ctx.strokeStyle = css("--chaos"); ctx.lineWidth = 2.5 * dpr; ctx.stroke();
   }
   ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.strokeStyle = css("--muted"); ctx.lineWidth = dpr;
   for (const t of S.transitions) { const x = X(t.estimated_minute); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H - 14 * dpr); ctx.stroke(); }
