@@ -117,6 +117,7 @@ class Orchestrator:
         p95 = lat[min(len(lat) - 1, int(0.95 * len(lat)))] if lat else 0.0
         return {
             **self.stats.as_dict(),
+            "claims_rejected": self.stats.claims_generated - self.stats.claims_verified,
             "insights": len(self.insights),
             "cues": len(self.cues),
             "latency_ms_mean": round(sum(lat) / len(lat), 3) if lat else 0.0,
