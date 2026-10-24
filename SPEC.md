@@ -38,8 +38,8 @@ Detection is tuned on seeds 0–39 and scored on held-out seeds 1000+ (`python -
 | Timeline accuracy (state history with back-dated changes) | ≥ 0.75 | 0.84 |
 | Live state accuracy (what the studio sees that minute) | reported | 0.56 |
 | Detection lag (true shift → confirmed) | reported | 5.7 min |
-| Truth Score (claims passing the Verifier) | ≥ 0.95 after retries | not built yet |
-| Insight latency (event → cue) | < 2 s offline, < 6 s hosted model | not built yet |
+| Truth Score (claims passing the Verifier) | ≥ 0.95 after retries | 1.00 with the offline generator; 0.91 raw at 30 % injected faults, with on-air accuracy 1.00 after retries (seeds 0–19) |
+| Insight latency (event → cue) | < 2 s offline, < 6 s hosted model | 1.4 ms mean, 16 ms max per insight; whole match < 0.1 s |
 | Realism per match | 900–1,300 passes, 12–40 shots, 70–90 % completion | ~1,090 passes, ~22 shots, ~80 %, ~2.1 goals |
 
 Known limitation: a shift is confirmed about 5–6 minutes after it starts, because a state needs a 5-minute window and 3 confirming minutes to avoid false alarms. Live claims therefore say "over the last five minutes", and the recap back-dates each shift to its estimated start.
