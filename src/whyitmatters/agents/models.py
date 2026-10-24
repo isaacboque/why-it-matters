@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from whyitmatters.schema import Side
 
 Lang = Literal["en", "es", "ca"]
-Mode = Literal["analyst", "fan", "player_focus"]
+Mode = Literal["analyst", "fan", "player_focus", "coach"]
 
 InsightKind = Literal[
     "state_shift",  # Match Pulse confirmed a change of who controls the game
@@ -21,7 +21,17 @@ InsightKind = Literal[
     "big_chance",  # missed chance with xG >= 0.3
     "top_speed",  # new fastest carry of the match
     "pass_master",  # a player reaches a completed-pass milestone
+    "press_surge",  # a team's pressing jumps: high recoveries, low PPDA
+    "midfield_battle",  # a team wins most of the midfield duels
+    "danger_turnovers",  # a team keeps losing the ball in its own half
+    "direct_switch",  # a team goes long to bypass the press
+    "pass_difficulty",  # hardest completed pass of the match so far
+    "shot_speed",  # fastest shot of the match so far
 ]
+
+# Metrics a viewer can follow on their own ("My metric" in the Fan tab)
+MetricTag = Literal["pressing", "duels", "possession", "xg", "pass_quality", "speed"]
+METRIC_TAGS: tuple[str, ...] = ("pressing", "duels", "possession", "xg", "pass_quality", "speed")
 
 Metric = Literal[
     "possession_share",  # window, side
@@ -35,9 +45,51 @@ Metric = Literal[
     "player_completed_passes",  # player, as of event
     "carry_speed_kmh",  # event
     "team_xg",  # side, whole match as of event
+    # tactical, window + side (pulse/metrics.py TeamWindow fields)
+    "duel_share_def",
+    "duel_share_mid",
+    "duel_share_att",
+    "duels_won_mid",
+    "high_recoveries",
+    "final_third_recoveries",
+    "counter_press",
+    "own_half_losses",
+    "progressive_passes",
+    "long_ball_share",
+    "central_buildup_share",
+    "ppda",
+    "pressures",
+    # event based
+    "pass_difficulty",  # event: difficulty of a completed pass
+    "shot_speed_kmh",  # event: ball speed of a shot
+    "buildup_seconds",  # shot event: seconds from winning the ball to the shot
+    "counter_press_in_move",  # shot event: 1 if the move began with a counter-press recovery
+    "long_balls_in_move",  # shot event: completed long balls in the move
 ]
 
-Unit = Literal["share", "count", "xg", "kmh", "rate", "minutes"]
+# Claim metrics read straight off a team's rolling window
+TEAM_WINDOW_METRICS = frozenset(
+    {
+        "possession_share",
+        "pass_completion",
+        "field_tilt",
+        "duel_share_def",
+        "duel_share_mid",
+        "duel_share_att",
+        "duels_won_mid",
+        "high_recoveries",
+        "final_third_recoveries",
+        "counter_press",
+        "own_half_losses",
+        "progressive_passes",
+        "long_ball_share",
+        "central_buildup_share",
+        "ppda",
+        "pressures",
+    }
+)
+
+Unit = Literal["share", "count", "xg", "kmh", "rate", "minutes", "index", "seconds"]
 
 
 class Claim(BaseModel):
@@ -64,6 +116,7 @@ class InsightCandidate(BaseModel):
     transition_id: str | None = None
     to_state: str | None = None
     from_state: str | None = None
+    window: tuple[int, int] | None = None  # tactical insights: the rolling window they describe
     evidence: list[str] = Field(default_factory=list)
 
 
@@ -114,6 +167,7 @@ class Insight(BaseModel):
     evidence: list[str]
     attempts: int
     latency_ms: float
+    tags: list[str] = Field(default_factory=list)  # which "My metric" threads it belongs to
 
 
 class Cue(BaseModel):
@@ -134,6 +188,7 @@ class Cue(BaseModel):
     claims: list[Claim]
     slots: dict[str, str] = Field(default_factory=dict)
     verified: bool = True
+    tags: list[str] = Field(default_factory=list)
 
 
 class Viewer(BaseModel):
@@ -141,6 +196,7 @@ class Viewer(BaseModel):
     lang: Lang = "en"
     club: Side | None = None  # favourite club
     player_id: str | None = None  # favourite / focus player
+    metric: MetricTag | None = None  # follow one thread only (goals always show)
 
 
 class PersonalCue(BaseModel):
@@ -158,6 +214,7 @@ class PersonalCue(BaseModel):
     evidence_event_ids: list[str]
     claims: list[Claim]
     verified: bool
+    tags: list[str] = Field(default_factory=list)
 
 
 class RecapMoment(BaseModel):

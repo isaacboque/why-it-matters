@@ -10,7 +10,16 @@ import random
 
 from whyitmatters.agents.models import Claim
 
-PERTURB = {"share": 0.12, "count": 3, "xg": 0.15, "kmh": 4.0, "rate": 1.5, "minutes": 2}
+PERTURB = {
+    "share": 0.12,
+    "count": 3,
+    "xg": 0.15,
+    "kmh": 4.0,
+    "rate": 1.5,
+    "minutes": 2,
+    "index": 0.15,
+    "seconds": 6,
+}
 
 
 class FaultInjector:

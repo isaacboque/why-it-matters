@@ -14,6 +14,12 @@ ON_SCREEN_SECONDS = {
     "big_chance": 12.0,
     "top_speed": 10.0,
     "pass_master": 10.0,
+    "press_surge": 15.0,
+    "midfield_battle": 15.0,
+    "danger_turnovers": 15.0,
+    "direct_switch": 15.0,
+    "pass_difficulty": 10.0,
+    "shot_speed": 10.0,
 }
 MIN_SIGNIFICANCE = 0.3
 MAX_DELAY_S = 90.0  # an insight that cannot air within this long of happening is stale
@@ -67,6 +73,7 @@ class Producer:
             evidence_event_ids=insight.evidence,
             claims=insight.claims,
             slots=insight.slots,
+            tags=insight.tags,
         )
         self.aired.append(cue)
         return cue
