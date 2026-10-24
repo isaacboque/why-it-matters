@@ -4,7 +4,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY web ./web
-RUN pip install --no-cache-dir ".[api]"
+RUN pip install --no-cache-dir ".[api,llm]"
 
 ENV WHYITMATTERS_WEB=/app/web
 EXPOSE 8000

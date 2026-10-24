@@ -19,7 +19,8 @@ Built for the Microsoft × Premier League **Inside the Game: Developer Hackathon
 | Render | FastAPI (SSE stream, overlay cue JSON), Studio / Fan / Trust views, Docker | done |
 | Interpret | Tactical engine: duels by zone, high recoveries, counter-press, dangerous losses, progressive passes, long-ball share, driver attribution, build-up of goals | done |
 | Explain | Cause → effect insights (press surge, midfield battle, dangerous turnovers, going long), hardest pass, fastest shot; every driver is a Verifier-checked claim | done |
-| Personalize | Analyst / fan / player-focus / coach modes, "My metric" thread, EN · ES · CA, re-verified | done |
+| Personalize | Analyst / fan / player-focus / coach modes, "My metric" thread, EN · ES · CA offline, re-verified | done |
+| Personalize | Optional model-written captions in any language (Azure OpenAI / Foundry or GitHub Models), guarded: numbers, names, length, retry, template fallback, cost cap | done |
 
 See [SPEC.md](SPEC.md) for the problem, users, success criteria and architecture.
 
@@ -67,6 +68,10 @@ or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`.
 - **Fan** — plain-language cues in EN / ES / CA, favourite club and player, player-focus mode.
 - **Trust** — live Truth Score, rejected claims, retries, latency and detection precision/recall. Tick *Unreliable model* to watch the Verifier catch mis-stated numbers.
 - API docs at `/docs`; overlay cues for a graphics partner at `GET /matches/{seed}/cues`; live feed at `GET /matches/{seed}/stream` (Server-Sent Events, a 90-minute match in ~3 minutes, `?duration=0` for instant).
+
+### Model-written text in any language (optional)
+
+`WIM_GENERATOR=llm` swaps the offline templates for an Azure OpenAI / Microsoft Foundry model (GitHub Models as a free fallback) that writes in any language. It is told only a JSON brief; numbers, names and length are checked before anything airs, a rejected answer is retried twice and then replaced by the template, and the Why? drawer and Trust tab show who wrote each caption. Default is `template` (fully offline). Setup, variables, cost guard and the guardrails are in [docs/LLM.md](docs/LLM.md).
 
 ### Static demo (no backend)
 

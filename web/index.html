@@ -59,7 +59,14 @@
       <div class="scoreboard" id="scoreboard-fan"></div>
       <div class="fan-controls">
         <label><span id="l-lang">Language</span>
-          <select id="f-lang"><option value="en">English</option><option value="es">Español</option><option value="ca">Català</option></select></label>
+          <select id="f-lang">
+            <option value="en">English</option><option value="es">Español</option><option value="ca">Català</option>
+            <option value="fr">Français</option><option value="de">Deutsch</option><option value="it">Italiano</option>
+            <option value="pt">Português</option><option value="nl">Nederlands</option><option value="ar">العربية</option>
+            <option value="ja">日本語</option><option value="ko">한국어</option><option value="zh">中文</option>
+            <option value="other">Other…</option>
+          </select>
+          <input id="f-lang-other" type="text" placeholder="BCP-47, e.g. sv" maxlength="20" hidden></label>
         <label><span id="l-mode">Show me</span>
           <select id="f-mode"></select></label>
         <label><span id="l-club">My club</span>
@@ -69,6 +76,7 @@
         <label><span id="l-metric">My metric</span>
           <select id="f-metric"></select></label>
       </div>
+      <div class="notice" id="fan-notice" role="status" hidden></div>
       <div class="fan-feed rail" id="fan-feed" aria-live="polite"></div>
     </section>
 

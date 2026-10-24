@@ -17,7 +17,7 @@ import asyncio
 import json
 import os
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
@@ -30,7 +30,8 @@ from pydantic import BaseModel
 
 from whyitmatters import __version__
 from whyitmatters.agents import Orchestrator, run_match
-from whyitmatters.agents.models import Cue, Lang, MetricTag, Mode, PersonalCue, Recap, Viewer
+from whyitmatters.agents.llm import choose_generator
+from whyitmatters.agents.models import Cue, MetricTag, Mode, PersonalCue, Recap, Viewer
 from whyitmatters.eval import score_match, summarize
 from whyitmatters.eval.__main__ import EVAL_SEED_OFFSET
 from whyitmatters.schema import Match, MatchMeta, Side
@@ -56,6 +57,7 @@ EVENT_FIELDS = (
     "score_away",
 )
 
+LANG_PATTERN = r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$"  # a BCP-47 tag, not free text
 SeedPath = Annotated[int, ApiPath(ge=0, le=MAX_SEED, description="Match seed")]
 
 
@@ -63,6 +65,7 @@ SeedPath = Annotated[int, ApiPath(ge=0, le=MAX_SEED, description="Match seed")]
 class Health(BaseModel):
     status: str
     version: str
+    generator: str = "template"  # which writer is on: template, or llm via <provider>
 
 
 class CuesResponse(BaseModel):
@@ -78,6 +81,7 @@ class PersonalResponse(BaseModel):
     viewer: Viewer
     cues: list[PersonalCue]
     recap: Recap
+    generator: str = "template"
 
 
 class EvalResponse(BaseModel):
@@ -87,17 +91,6 @@ class EvalResponse(BaseModel):
     minute_accuracy: float
     timeline_accuracy: float
     mean_detection_lag_min: float
-
-
-# ------------------------------------------------------------------------ match cache
-@lru_cache(maxsize=24)
-def _run(seed: int, faults: float) -> tuple[Match, Orchestrator]:
-    match = simulate(seed)
-    return match, run_match(match, fault_rate=faults, seed=seed)
-
-
-def _load(seed: int, faults: float) -> tuple[Match, Orchestrator]:
-    return _run(seed, round(faults, 2))
 
 
 @lru_cache(maxsize=4)
@@ -177,20 +170,34 @@ async def _replay(feed: list[dict[str, Any]], duration: float) -> AsyncIterator[
 
 
 # ------------------------------------------------------------------------ app
-def create_app() -> FastAPI:
+def create_app(env: Mapping[str, str] | None = None, client_factory=None) -> FastAPI:
+    """`env` (default: the process environment) picks the text writer: WIM_GENERATOR=template
+    (default, offline) or llm. `client_factory` lets tests inject a fake model client."""
+    make_generator, generator_status = (
+        choose_generator(env, client_factory) if client_factory else choose_generator(env)
+    )
     app = FastAPI(
         title="WhyItMatters",
         version=__version__,
         description="Explainable, verified match intelligence from synthetic football events.",
     )
 
+    @lru_cache(maxsize=24)
+    def run(seed: int, faults: float) -> tuple[Match, Orchestrator]:
+        match = simulate(seed)
+        # a fresh writer per match: its model-call budget and cache belong to that match
+        return match, run_match(match, fault_rate=faults, seed=seed, generator=make_generator())
+
+    def load(seed: int, faults: float) -> tuple[Match, Orchestrator]:
+        return run(seed, round(faults, 2))
+
     @app.get("/health", response_model=Health, tags=["system"])
     def health() -> Health:
-        return Health(status="ok", version=__version__)
+        return Health(status="ok", version=__version__, generator=generator_status)
 
     @app.get("/matches/{seed}", response_model=MatchMeta, tags=["match"])
     def match_info(seed: SeedPath) -> MatchMeta:
-        return _load(seed, 0.0)[0].meta
+        return load(seed, 0.0)[0].meta
 
     @app.get("/matches/{seed}/stream", tags=["match"], response_class=StreamingResponse)
     async def stream(
@@ -210,7 +217,7 @@ def create_app() -> FastAPI:
     ) -> StreamingResponse:
         """Server-Sent Events. Event types: meta, event, pulse, transition, verdict, insight,
         cue (with `why`), dropped, trust, recap, end. Every message is `{"t", "data"}`."""
-        _, orch = _load(seed, faults)
+        _, orch = await asyncio.to_thread(load, seed, faults)  # a model-written match is slow
         return StreamingResponse(
             _replay(build_feed(orch), duration),
             media_type="text/event-stream",
@@ -224,7 +231,7 @@ def create_app() -> FastAPI:
     ) -> CuesResponse:
         """Overlay cues as JSON: `t_in`/`t_out` in match seconds, `priority` 1 = highest,
         the claims behind every number and the event ids that prove them."""
-        match, orch = _load(seed, faults)
+        match, orch = load(seed, faults)
         return CuesResponse(
             match_id=match.meta.match_id,
             seed=seed,
@@ -236,7 +243,15 @@ def create_app() -> FastAPI:
     def personal(
         seed: SeedPath,
         mode: Mode = "fan",
-        lang: Lang = "en",
+        lang: Annotated[
+            str,
+            Query(
+                pattern=LANG_PATTERN,
+                description="Any BCP-47 code. en / es / ca use the offline templates; other "
+                "languages need WIM_GENERATOR=llm, otherwise the text is English and "
+                "`translation_unavailable` is set",
+            ),
+        ] = "en",
         club: Side | None = None,
         player: str | None = None,
         metric: Annotated[
@@ -246,12 +261,15 @@ def create_app() -> FastAPI:
         faults: float = Query(0.0, ge=0, le=1),
     ) -> PersonalResponse:
         """Cues and recap as one viewer sees them. Numbers are re-verified per viewer."""
-        _, orch = _load(seed, faults)
+        _, orch = load(seed, faults)
         if player is not None and player not in orch.state.players:
             raise HTTPException(status_code=422, detail=f"unknown player {player!r}")
         viewer = Viewer(mode=mode, lang=lang, club=club, player_id=player, metric=metric)
         return PersonalResponse(
-            viewer=viewer, cues=orch.personalize(viewer), recap=orch.recap_for(viewer)
+            viewer=viewer,
+            cues=orch.personalize(viewer),
+            recap=orch.recap_for(viewer),
+            generator=generator_status,
         )
 
     @app.get("/eval", response_model=EvalResponse, tags=["system"])

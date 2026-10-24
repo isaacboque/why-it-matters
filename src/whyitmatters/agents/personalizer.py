@@ -8,7 +8,7 @@ that no verified claim supports means the cue is withheld for that viewer.
 from __future__ import annotations
 
 from whyitmatters.agents.blackboard import Blackboard
-from whyitmatters.agents.generator import TemplateGenerator, TextGenerator
+from whyitmatters.agents.generator import TemplateGenerator, TextGenerator, render_with_source
 from whyitmatters.agents.models import Cue, PersonalCue, TrustStats, Viewer
 from whyitmatters.agents.verifier import Verifier
 
@@ -52,15 +52,18 @@ class Personalizer:
                 return None
 
         template = cue.slots.get("template", "")
-        headline, body = self.generator.render(
-            template, viewer.mode, viewer.lang, cue.slots, cue.claims
+        out = render_with_source(
+            self.generator, template, viewer.mode, viewer.lang, cue.slots, cue.claims
         )
+        headline, body = out.headline, out.body
         self.stats.personalized_checked += 1
         checks = self.verifier.check_claims(state, cue.claims)
-        unsupported = self.verifier.unsupported_numbers(
-            f"{headline} {body}", cue.claims, viewer.lang
-        )
-        if unsupported or not all(c.ok for c in checks):
+        # English standing in for a language without a writer is checked as English
+        check_lang = "en" if out.translation_unavailable else viewer.lang
+        text = f"{headline} {body}"
+        unsupported = self.verifier.unsupported_numbers(text, cue.claims, check_lang)
+        names = self.verifier.unsupported_names(state, text, cue.slots)
+        if unsupported or names or not all(c.ok for c in checks):
             self.stats.personalized_rejected += 1
             return None
 
@@ -79,4 +82,6 @@ class Personalizer:
             claims=cue.claims,
             verified=True,
             tags=cue.tags,
+            written_by=out.source,
+            translation_unavailable=out.translation_unavailable,
         )

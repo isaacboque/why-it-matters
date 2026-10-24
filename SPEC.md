@@ -19,7 +19,7 @@ A scoreline says what happened, not why. Studio and streaming teams need insight
 2. **Interpret** — the Match Pulse engine aggregates events into rolling team states: possession share, field tilt, PPDA, tempo, turnover rate, xG flow; classifies each window as `home_control`, `away_control`, `chaos` or `balanced`, and emits state transitions.
 3. **Explain** — agents turn transitions and key moments into claims with evidence: Analyst (what is worth saying), Explainer (why it matters), Verifier (every claim checked against match state; rejected claims are rewritten).
 4. **Render** — Producer applies an on-air budget and emits timed overlay cues (JSON) plus a full-time recap.
-5. **Personalize** — Personalizer reshapes verified insight per mode (analyst, fan, player focus), club, player and language (EN, ES, CA), then re-verifies.
+5. **Personalize** — Personalizer reshapes verified insight per mode (analyst, fan, player focus, coach), club, player, metric and language (EN, ES, CA offline; any BCP-47 language with the optional model writer, see [docs/LLM.md](docs/LLM.md)), then re-verifies numbers, names and length.
 
 ## Data contract
 

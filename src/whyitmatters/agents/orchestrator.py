@@ -38,6 +38,8 @@ class Orchestrator:
         budget: int = 3,
     ):
         gen = generator or TemplateGenerator()
+        if hasattr(gen, "bind"):
+            gen.bind(meta)  # a model-backed writer learns which names exist in this match
         self.state = Blackboard(meta)
         self.stats = TrustStats()
         self.analyst = Analyst()
@@ -89,12 +91,13 @@ class Orchestrator:
                 personalize=personalize,
             )
             checks = self.verifier.check_claims(self.state, recap.claims)
-            unsupported = self.verifier.unsupported_numbers(
-                f"{recap.headline} {recap.summary}", recap.claims, viewer.lang
-            )
+            text = f"{recap.headline} {recap.summary}"
+            check_lang = "en" if recap.translation_unavailable else viewer.lang
+            unsupported = self.verifier.unsupported_numbers(text, recap.claims, check_lang)
+            names = self.verifier.unsupported_names(self.state, text, recap.slots)
             if count:
                 self._count(checks)
-            if not unsupported and all(c.ok for c in checks):
+            if not unsupported and not names and all(c.ok for c in checks):
                 return recap
         raise RuntimeError("recap failed verification with every writer")
 
@@ -122,6 +125,14 @@ class Orchestrator:
             "cues": len(self.cues),
             "latency_ms_mean": round(sum(lat) / len(lat), 3) if lat else 0.0,
             "latency_ms_p95": round(p95, 3),
+            "written_by_model": sum(i.slots.get("written_by") == "model" for i in self.insights),
+            "written_by_fallback": sum(
+                i.slots.get("written_by") == "template_fallback" for i in self.insights
+            ),
+            "written_by_template": sum(
+                i.slots.get("written_by") not in ("model", "template_fallback")
+                for i in self.insights
+            ),
             **({"on_air_accuracy": round(self.audit(), 3)} if audit else {}),
         }
 
@@ -194,6 +205,7 @@ class Orchestrator:
                     "headline": draft.headline,
                     "failures": [c.reason for c in verdict.failures],
                     "unsupported_numbers": verdict.unsupported_numbers,
+                    "unsupported_names": verdict.unsupported_names,
                 },
             )
             if verdict.ok:

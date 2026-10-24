@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from whyitmatters.schema import Side
 
-Lang = Literal["en", "es", "ca"]
+Lang = str  # any BCP-47 code ("en", "pt-BR", "ja"); en / es / ca have offline templates
 Mode = Literal["analyst", "fan", "player_focus", "coach"]
 
 InsightKind = Literal[
@@ -144,6 +144,9 @@ class Verdict(BaseModel):
     ok: bool
     checks: list[ClaimCheck]
     unsupported_numbers: list[str] = Field(default_factory=list)
+    unsupported_names: list[str] = Field(
+        default_factory=list
+    )  # known teams / players not in the brief
 
     @property
     def failures(self) -> list[ClaimCheck]:
@@ -215,6 +218,8 @@ class PersonalCue(BaseModel):
     claims: list[Claim]
     verified: bool
     tags: list[str] = Field(default_factory=list)
+    written_by: str = "template"  # "model" | "template" | "template_fallback"
+    translation_unavailable: bool = False  # the text is English because the language has no writer
 
 
 class RecapMoment(BaseModel):
@@ -231,6 +236,9 @@ class Recap(BaseModel):
     summary: str
     moments: list[RecapMoment]
     claims: list[Claim]
+    written_by: str = "template"
+    translation_unavailable: bool = False
+    slots: dict[str, str] = Field(default_factory=dict)  # names the recap may mention
 
 
 class TrustStats(BaseModel):

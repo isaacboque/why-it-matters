@@ -9,7 +9,7 @@ here, and the Verifier rejects any number in the text that no claim supports.
 from __future__ import annotations
 
 import re
-from typing import Protocol
+from typing import NamedTuple, Protocol
 
 from whyitmatters.agents.models import Claim, Lang, Mode
 from whyitmatters.agents.texts_tactics import (
@@ -21,6 +21,26 @@ from whyitmatters.agents.texts_tactics import (
 )
 
 NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
+
+TEMPLATE_LANGS = ("en", "es", "ca")  # languages the offline templates are written in
+# Decimal separator by base language; anything not listed uses "."
+DECIMAL_SEP = {
+    **dict.fromkeys(
+        ("es", "ca", "fr", "de", "it", "pt", "nl", "pl", "ru", "tr", "sv", "da", "nb", "fi", "cs"),
+        ",",
+    ),
+}
+
+
+def base_lang(lang: Lang) -> str:
+    """'pt-BR' -> 'pt'."""
+    return lang.split("-")[0].split("_")[0].lower()
+
+
+def template_lang(lang: Lang) -> str:
+    """The language the offline templates will actually be written in (English if none)."""
+    base = base_lang(lang)
+    return base if base in TEMPLATE_LANGS else "en"
 
 
 def fmt(claim: Claim, lang: Lang) -> str:
@@ -34,11 +54,20 @@ def fmt(claim: Claim, lang: Lang) -> str:
         s = f"{v:.1f}"
     else:  # count, kmh, minutes, seconds
         s = f"{round(v)}"
-    return s.replace(".", ",") if lang in ("es", "ca") else s
+    return s.replace(".", DECIMAL_SEP.get(base_lang(lang), "."))
 
 
 def numbers_in(text: str) -> list[str]:
     return NUMBER_RE.findall(text)
+
+
+class Rendered(NamedTuple):
+    """What a generator wrote, and who wrote it."""
+
+    headline: str
+    body: str
+    source: str = "template"  # "model" | "template" | "template_fallback" | "other"
+    translation_unavailable: bool = False  # English text standing in for the requested language
 
 
 class TextGenerator(Protocol):
@@ -49,6 +78,22 @@ class TextGenerator(Protocol):
     ) -> tuple[str, str]:
         """Return (headline, body)."""
         ...
+
+
+def render_with_source(
+    generator: TextGenerator,
+    template: str,
+    mode: Mode,
+    lang: Lang,
+    slots: dict[str, str],
+    claims: list[Claim],
+) -> Rendered:
+    """Render through any generator; those that know who wrote the text (`render_full`) say so."""
+    full = getattr(generator, "render_full", None)
+    if full is not None:
+        return full(template, mode, lang, slots, claims)
+    headline, body = generator.render(template, mode, lang, slots, claims)
+    return Rendered(headline, body, "other")
 
 
 # ---------------------------------------------------------------------------- templates
@@ -343,6 +388,21 @@ class TemplateGenerator:
 
     def render(
         self, template: str, mode: Mode, lang: Lang, slots: dict[str, str], claims: list[Claim]
+    ) -> tuple[str, str]:
+        out = self.render_full(template, mode, lang, slots, claims)
+        return out.headline, out.body
+
+    def render_full(
+        self, template: str, mode: Mode, lang: Lang, slots: dict[str, str], claims: list[Claim]
+    ) -> Rendered:
+        """Written in `lang` when a template exists for it, otherwise in English (flagged)."""
+        base = base_lang(lang)
+        lang = template_lang(lang)
+        headline, body = self._fill(template, mode, lang, slots, claims)
+        return Rendered(headline, body, "template", base not in TEMPLATE_LANGS)
+
+    def _fill(
+        self, template: str, mode: Mode, lang: str, slots: dict[str, str], claims: list[Claim]
     ) -> tuple[str, str]:
         style = "analyst" if mode in ("analyst", "coach") else "fan"
         headline_t, body_t = T[template][style][lang]

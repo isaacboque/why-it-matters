@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from whyitmatters.agents.blackboard import Blackboard
-from whyitmatters.agents.generator import TemplateGenerator, TextGenerator
+from whyitmatters.agents.generator import TemplateGenerator, TextGenerator, render_with_source
 from whyitmatters.agents.models import Claim, Cue, Lang, Mode, Recap, RecapMoment
 from whyitmatters.agents.verifier import Verifier
 
@@ -70,7 +70,8 @@ class RecapWriter:
             created_more = state.team_xg[win_side] >= state.team_xg[lose_side]
             verdict = "verdict_deserved" if created_more else "verdict_robbery"
         slots = {**names, "verdict": verdict, "winner": winner, "loser": loser}
-        headline, summary = self.generator.render("recap", mode, lang, slots, claims)
+        out = render_with_source(self.generator, "recap", mode, lang, slots, claims)
+        headline, summary = out.headline, out.body
 
         ranked = sorted(aired, key=lambda c: (-_weight(c), c.t_in))[:RECAP_MOMENTS]
         moments = []
@@ -94,6 +95,9 @@ class RecapWriter:
             summary=summary,
             moments=moments,
             claims=claims,
+            written_by=out.source,
+            translation_unavailable=out.translation_unavailable,
+            slots=slots,
         )
 
 
