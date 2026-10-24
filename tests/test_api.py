@@ -170,6 +170,18 @@ def test_static_export_is_self_contained(tmp_path):
     assert len(focus) == 3
     assert f"data/7/personal-player_focus-{focus[0]}-ca.json" in m["files"]
     assert "data/7/personal-fan-es.json" in m["files"] and "data/eval.json" in m["files"]
+    assert "data/7/personal-coach-ca.json" in m["files"]
     feed = json.loads((tmp_path / "demo/data/7/stream-faults.json").read_text(encoding="utf-8"))
     assert any(r["type"] == "verdict" and not r["data"]["ok"] for r in feed)
     assert any(r["type"] == "recap" for r in feed)
+
+
+def test_personal_coach_mode_and_my_metric(client):
+    coach = client.get(f"/matches/{SEED}/personal?mode=coach&lang=ca")
+    assert coach.status_code == 200 and coach.json()["cues"]
+    assert all(c["tags"] is not None for c in coach.json()["cues"])
+    for metric in ("pressing", "duels", "possession", "xg", "pass_quality", "speed"):
+        r = client.get(f"/matches/{SEED}/personal?mode=fan&metric={metric}")
+        assert r.status_code == 200
+        assert all(c["kind"] == "goal" or metric in c["tags"] for c in r.json()["cues"])
+    assert client.get(f"/matches/{SEED}/personal?metric=nonsense").status_code == 422

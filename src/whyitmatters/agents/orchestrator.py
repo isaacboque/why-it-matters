@@ -214,6 +214,7 @@ class Orchestrator:
                     evidence=cand.evidence,
                     attempts=attempt,
                     latency_ms=round(latency, 3),
+                    tags=[t for t in draft.slots.get("tags", "").split(",") if t],
                 )
                 self.insights.append(insight)
                 self._emit("insight", cand.t, insight)

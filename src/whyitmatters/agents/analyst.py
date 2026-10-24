@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from whyitmatters.agents.blackboard import Blackboard
-from whyitmatters.agents.models import InsightCandidate
-from whyitmatters.pulse import Transition
+from whyitmatters.agents.models import InsightCandidate, InsightKind
+from whyitmatters.agents.tactics import TacticsWatcher
+from whyitmatters.pulse import PulseSnapshot, Transition
 from whyitmatters.pulse.engine import PulseOutput
 from whyitmatters.schema import Event, EventType, Outcome
 
@@ -14,6 +15,10 @@ PASS_MASTER_LEAD = 10  # ... and this many more than the next best passer
 PASS_MASTER_STEP = 40  # the same player is only mentioned again after this many more
 TOP_SPEED_FLOOR_KMH = 24.0
 TOP_SPEED_MIN_GAP_MIN = 10
+HARD_PASS_FLOOR = 0.8  # difficulty (0 easy .. 1 very hard) of a completed pass worth a mention
+HARD_PASS_MIN_GAP_MIN = 12
+SHOT_SPEED_FLOOR_KMH = 110.0
+SHOT_SPEED_MIN_GAP_MIN = 15
 SHIFT_FLICKER_MIN = 4  # a non-control shift this soon after another one is noise
 SHIFT_REPEAT_MIN = {  # the same kind of shift is not voiced again within this many minutes
     "home_control": 10,
@@ -28,6 +33,8 @@ SIGNIFICANCE = {
     "big_chance": 0.6,
     "top_speed": 0.35,
     "pass_master": 0.3,
+    "pass_difficulty": 0.3,
+    "shot_speed": 0.3,
 }
 
 
@@ -40,12 +47,31 @@ class Analyst:
         self._last_speed_minute = -TOP_SPEED_MIN_GAP_MIN
         self._last_shift: dict[str, int] = {}  # to_state -> minute of the last one voiced
         self._last_transition_minute = -SHIFT_FLICKER_MIN
+        self._last_shift_minute = -99  # minute of the last shift actually voiced
         self._voiced_state: str | None = None  # the state the audience was last told about
         self._last_master: tuple[str, int] | None = None  # (player, completed passes)
+        self._hardest_pass = HARD_PASS_FLOOR
+        self._last_hard_pass_minute = -HARD_PASS_MIN_GAP_MIN
+        self._fastest_shot = SHOT_SPEED_FLOOR_KMH
+        self._last_shot_speed_minute = -SHOT_SPEED_MIN_GAP_MIN
+        self.tactics = TacticsWatcher(self._id)
 
     def _id(self) -> str:
         self._n += 1
         return f"in-{self._n:03d}"
+
+    def _event_candidate(self, kind: InsightKind, ev: Event) -> InsightCandidate:
+        return InsightCandidate(
+            id=self._id(),
+            kind=kind,
+            minute=ev.minute,
+            t=ev.t,
+            significance=SIGNIFICANCE[kind],
+            side=ev.side,
+            player_id=ev.player_id,
+            event_id=ev.id,
+            evidence=[ev.id],
+        )
 
     def _worth_saying(self, tr: Transition) -> bool:
         """Drop shifts a pundit would not mention: flicker, repeats, and 'settled' after chaos."""
@@ -62,6 +88,7 @@ class Analyst:
         if last is not None and tr.detected_minute - last < SHIFT_REPEAT_MIN[tr.to_state]:
             return False
         self._last_shift[tr.to_state] = tr.detected_minute
+        self._last_shift_minute = tr.detected_minute
         self._voiced_state = tr.to_state
         return True
 
@@ -71,6 +98,8 @@ class Analyst:
         out: list[InsightCandidate] = []
 
         for item in pulse_out:
+            if isinstance(item, PulseSnapshot):
+                out.extend(self.tactics.run(state, item, ev.t, self._last_shift_minute))
             if isinstance(item, Transition) and self._worth_saying(item):
                 sig = SIGNIFICANCE["state_shift"]
                 if item.to_state == "balanced":
@@ -122,6 +151,12 @@ class Analyst:
                         evidence=[ev.id],
                     )
                 )
+            speed = ev.ball_speed_kmh or 0.0
+            if speed >= self._fastest_shot + 0.5:
+                self._fastest_shot = speed
+                if ev.minute - self._last_shot_speed_minute >= SHOT_SPEED_MIN_GAP_MIN:
+                    self._last_shot_speed_minute = ev.minute
+                    out.append(self._event_candidate("shot_speed", ev))
 
         elif (
             ev.type == EventType.CARRY
@@ -147,6 +182,12 @@ class Analyst:
                 )
 
         elif ev.type == EventType.PASS and ev.outcome == Outcome.COMPLETE and ev.player_id:
+            hardness = ev.pass_difficulty or 0.0
+            if hardness >= self._hardest_pass + 0.005 and ev.minute >= 5:
+                self._hardest_pass = hardness
+                if ev.minute - self._last_hard_pass_minute >= HARD_PASS_MIN_GAP_MIN:
+                    self._last_hard_pass_minute = ev.minute
+                    out.append(self._event_candidate("pass_difficulty", ev))
             done = state.stats[ev.player_id].completed
             best_other = max(
                 (st.completed for pid, st in state.stats.items() if pid != ev.player_id),

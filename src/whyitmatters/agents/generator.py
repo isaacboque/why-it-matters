@@ -12,6 +12,13 @@ import re
 from typing import Protocol
 
 from whyitmatters.agents.models import Claim, Lang, Mode
+from whyitmatters.agents.texts_tactics import (
+    ADVICE,
+    BUILDUP_PHRASES,
+    DRIVER_PHRASES,
+    JOINERS,
+    TEMPLATES,
+)
 
 NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
 
@@ -21,11 +28,11 @@ def fmt(claim: Claim, lang: Lang) -> str:
     v = claim.value
     if claim.unit == "share":
         return f"{round(v * 100)}%"
-    if claim.unit == "xg":
+    if claim.unit in ("xg", "index"):
         s = f"{v:.2f}"
     elif claim.unit == "rate":
         s = f"{v:.1f}"
-    else:  # count, kmh, minutes
+    else:  # count, kmh, minutes, seconds
         s = f"{round(v)}"
     return s.replace(".", ",") if lang in ("es", "ca") else s
 
@@ -161,21 +168,27 @@ T: dict[str, dict[str, dict[str, tuple[str, str]]]] = {
         "analyst": {
             "en": (
                 "GOAL {home} {#sh}–{#sa} {away}",
-                "{player} scores from a chance worth {#xg} xG. {flow}",
+                "{player} scores from a chance worth {#xg} xG. {flow} {buildup}",
             ),
             "es": (
                 "GOL {home} {#sh}–{#sa} {away}",
-                "{player} marca en una ocasión de {#xg} xG. {flow}",
+                "{player} marca en una ocasión de {#xg} xG. {flow} {buildup}",
             ),
             "ca": (
                 "GOL {home} {#sh}–{#sa} {away}",
-                "{player} marca en una ocasió de {#xg} xG. {flow}",
+                "{player} marca en una ocasió de {#xg} xG. {flow} {buildup}",
             ),
         },
         "fan": {
-            "en": ("GOAL! {player}!", "{team} score! It's {home} {#sh}–{#sa} {away}. {flow}"),
-            "es": ("¡GOL! ¡{player}!", "¡Marca {team}! {home} {#sh}–{#sa} {away}. {flow}"),
-            "ca": ("GOL! {player}!", "Marca {team}! {home} {#sh}–{#sa} {away}. {flow}"),
+            "en": (
+                "GOAL! {player}!",
+                "{team} score! It's {home} {#sh}–{#sa} {away}. {flow} {buildup}",
+            ),
+            "es": (
+                "¡GOL! ¡{player}!",
+                "¡Marca {team}! {home} {#sh}–{#sa} {away}. {flow} {buildup}",
+            ),
+            "ca": ("GOL! {player}!", "Marca {team}! {home} {#sh}–{#sa} {away}. {flow} {buildup}"),
         },
     },
     "big_chance": {
@@ -272,6 +285,8 @@ T: dict[str, dict[str, dict[str, tuple[str, str]]]] = {
     },
 }
 
+T.update(TEMPLATES)
+
 # Number-free phrases chosen by the agents (keys go in slots as "flow" / "verdict").
 PHRASES: dict[str, dict[str, str]] = {
     "flow_against": {
@@ -290,6 +305,7 @@ PHRASES: dict[str, dict[str, str]] = {
         "ca": "El partit trencat ha acabat donant un gol.",
     },
     "flow_none": {"en": "", "es": "", "ca": ""},
+    **BUILDUP_PHRASES,
     "verdict_deserved": {
         "en": "A deserved win for {winner}.",
         "es": "Victoria merecida de {winner}.",
@@ -310,20 +326,35 @@ PHRASES: dict[str, dict[str, str]] = {
 _SLOT_RE = re.compile(r"\{(#?)(\w+)\}")
 
 
+def _cause(spec: str, lang: Lang) -> str:
+    """'duel_mid:dv1,high_rec:dv2' -> one clause: the driver phrases, each bound to its claim."""
+    parts = []
+    for item in filter(None, spec.split(",")):
+        driver, claim_key = item.split(":")
+        parts.append(DRIVER_PHRASES[driver][lang].replace("{#v}", f"{{#{claim_key}}}"))
+    if len(parts) < 2:
+        return "".join(parts)
+    sep, last = JOINERS[lang]
+    return sep.join(parts[:-1]) + last + parts[-1]
+
+
 class TemplateGenerator:
     name = "template"
 
     def render(
         self, template: str, mode: Mode, lang: Lang, slots: dict[str, str], claims: list[Claim]
     ) -> tuple[str, str]:
-        style = "analyst" if mode == "analyst" else "fan"
+        style = "analyst" if mode in ("analyst", "coach") else "fan"
         headline_t, body_t = T[template][style][lang]
+        if mode == "coach" and slots.get("advice") in ADVICE:
+            body_t = f"{body_t} {ADVICE[slots['advice']][lang]}"
         values = {c.key: fmt(c, lang) for c in claims}
         words = dict(slots)
-        for slot in ("flow", "verdict"):
+        for slot in ("flow", "verdict", "buildup"):
             phrase_key = words.get(slot)
             if phrase_key in PHRASES:
                 words[slot] = PHRASES[phrase_key][lang]
+        words["cause"] = _cause(slots.get("cause", ""), lang)
 
         def fill(text: str, depth: int = 0) -> str:
             def sub(m: re.Match[str]) -> str:

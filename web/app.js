@@ -11,18 +11,24 @@ const I18N = {
     fan: "Plain words", focus: "Player focus", analyst: "The numbers", empty: "Nothing yet. Kick off the match.",
     full: "Full time", moments: "Moments that decided it", recap: "Recap", close: "Close", foryou: "for you",
     verified: "verified", kickoff: "Kick-off",
+    coach: "Coach view", metric: "My metric", all: "Everything",
+    m: { pressing: "Pressing", duels: "Duels", possession: "Possession", xg: "xG (chances)", pass_quality: "Pass quality", speed: "Speed" },
   },
   es: {
     lang: "Idioma", mode: "Quiero ver", club: "Mi club", player: "Mi jugador", none: "— ninguno —",
     fan: "En cristiano", focus: "Foco en un jugador", analyst: "Los números", empty: "Todavía nada. Empieza el partido.",
     full: "Final", moments: "Los momentos que decidieron", recap: "Resumen", close: "Cerrar", foryou: "para ti",
     verified: "verificado", kickoff: "Saque inicial",
+    coach: "Vista de entrenador", metric: "Mi métrica", all: "Todo",
+    m: { pressing: "Presión", duels: "Duelos", possession: "Posesión", xg: "xG (ocasiones)", pass_quality: "Calidad de pase", speed: "Velocidad" },
   },
   ca: {
     lang: "Idioma", mode: "Vull veure", club: "El meu club", player: "El meu jugador", none: "— cap —",
     fan: "En paraules planes", focus: "Focus en un jugador", analyst: "Els números", empty: "Encara res. Comença el partit.",
     full: "Final", moments: "Els moments que ho van decidir", recap: "Resum", close: "Tanca", foryou: "per a tu",
     verified: "verificat", kickoff: "Servei inicial",
+    coach: "Vista d'entrenador", metric: "La meva mètrica", all: "Tot",
+    m: { pressing: "Pressió", duels: "Duels", possession: "Possessió", xg: "xG (ocasions)", pass_quality: "Qualitat de passada", speed: "Velocitat" },
   },
 };
 
@@ -31,13 +37,29 @@ const METRICS = {
   turnovers_per_min: "Turnovers per minute", window_minutes: "Window (minutes)", shot_xg: "Shot xG",
   score_home: "Score (home)", score_away: "Score (away)", player_completed_passes: "Completed passes",
   carry_speed_kmh: "Carry speed (km/h)", team_xg: "Team xG",
+  duel_share_def: "Duels won, own third", duel_share_mid: "Duels won, midfield", duel_share_att: "Duels won, final third",
+  duels_won_mid: "Midfield duels won", high_recoveries: "High recoveries", final_third_recoveries: "Final-third recoveries",
+  counter_press: "Counter-press recoveries", own_half_losses: "Losses in own half", progressive_passes: "Progressive passes",
+  long_ball_share: "Long-ball share", central_buildup_share: "Central build-up share", ppda: "Passes per defensive action",
+  pressures: "Pressures", pass_difficulty: "Pass difficulty", shot_speed_kmh: "Shot speed (km/h)",
+  buildup_seconds: "Seconds from winning the ball to the shot", counter_press_in_move: "Move began with a counter-press",
+  long_balls_in_move: "Long balls in the move",
 };
 const UNITS = {
   possession_share: "share", pass_completion: "share", field_tilt: "share", turnovers_per_min: "rate",
   window_minutes: "minutes", shot_xg: "xg", team_xg: "xg", score_home: "count", score_away: "count",
   player_completed_passes: "count", carry_speed_kmh: "kmh",
+  duel_share_def: "share", duel_share_mid: "share", duel_share_att: "share", duels_won_mid: "count",
+  high_recoveries: "count", final_third_recoveries: "count", counter_press: "count", own_half_losses: "count",
+  progressive_passes: "count", long_ball_share: "share", central_buildup_share: "share", ppda: "rate",
+  pressures: "count", pass_difficulty: "index", shot_speed_kmh: "kmh", buildup_seconds: "seconds",
+  counter_press_in_move: "count", long_balls_in_move: "count",
 };
-const KINDS = { goal: "goal", state_shift: "shift", big_chance: "chance", top_speed: "speed", pass_master: "passing" };
+const KINDS = {
+  goal: "goal", state_shift: "shift", big_chance: "chance", top_speed: "speed", pass_master: "passing",
+  press_surge: "press", midfield_battle: "midfield", danger_turnovers: "danger", direct_switch: "long ball",
+  pass_difficulty: "hard pass", shot_speed: "shot speed",
+};
 
 const S = {};
 let es = null;
@@ -51,7 +73,7 @@ function reset() {
   Object.assign(S, {
     seed: 7, info: null, matchT: 0, events: [], pulses: [], transitions: [], cues: [], verdicts: [],
     trust: null, eval: S.eval || null, score: [0, 0], recap: null, personal: null, ended: false,
-    viewer: S.viewer || { mode: "fan", lang: "en", club: "", player: "" },
+    viewer: S.viewer || { mode: "fan", lang: "en", club: "", player: "", metric: "" },
   });
 }
 reset();
@@ -62,7 +84,7 @@ const clock = (t) => `${pad(Math.floor(t / 60))}:${pad(Math.floor(t % 60))}`;
 function fmtVal(unit, v) {
   if (v == null) return "—";
   if (unit === "share") return `${Math.round(v * 100)}%`;
-  if (unit === "xg") return v.toFixed(2);
+  if (unit === "xg" || unit === "index") return v.toFixed(2);
   if (unit === "rate") return v.toFixed(1);
   return String(Math.round(v));
 }
@@ -193,6 +215,7 @@ async function refreshPersonal() {
   const q =new URLSearchParams({ mode: v.mode, lang: v.lang, faults: $("faults").checked ? 0.3 : 0 });
   if (v.club) q.set("club", v.club);
   if (v.player) q.set("player", v.player);
+  if (v.metric) q.set("metric", v.metric);
   try {
     const r = await fetch(`matches/${S.seed}/personal?${q}`);
     const body = await r.json();
@@ -210,6 +233,8 @@ async function refreshPersonalStatic(token) {
   try {
     const body = await (await fetch(`data/${S.seed}/personal-${name}.json`)).json();
     body.cues.forEach((c) => { c.for_you = (!!v.club && c.side === v.club) || (!!v.player && c.player_id === v.player); });
+    // "My metric" is applied here, like the API does: one thread only, goals always show
+    if (v.metric) body.cues = body.cues.filter((c) => c.kind === "goal" || (c.tags || []).includes(v.metric));
     if (token === personalToken) { S.personal = body; renderFan(); }
   } catch { /* missing file: fan view stays as is */ }
 }
@@ -289,15 +314,20 @@ document.addEventListener("click", (e) => {
 });
 
 // ----------------------------------------------------------------------------- fan view
-const MODES = ["fan", "player_focus", "analyst"];
+const MODES = ["fan", "player_focus", "analyst", "coach"];
+const METRIC_KEYS = ["pressing", "duels", "possession", "xg", "pass_quality", "speed"];
 function buildSelectors() {
   const v = S.viewer;
   const t = T();
   $("l-lang").textContent = t.lang; $("l-mode").textContent = t.mode;
   $("l-club").textContent = t.club; $("l-player").textContent = t.player;
+  $("l-metric").textContent = t.metric;
   $("f-lang").value = v.lang;
-  $("f-mode").innerHTML = MODES.map((m) => `<option value="${m}">${esc({ fan: t.fan, player_focus: t.focus, analyst: t.analyst }[m])}</option>`).join("");
+  $("f-mode").innerHTML = MODES.map((m) => `<option value="${m}">${esc({ fan: t.fan, player_focus: t.focus, analyst: t.analyst, coach: t.coach }[m])}</option>`).join("");
   $("f-mode").value = v.mode;
+  $("f-metric").innerHTML = [`<option value="">${esc(t.all)}</option>`,
+    ...METRIC_KEYS.map((k) => `<option value="${k}">${esc(t.m[k])}</option>`)].join("");
+  $("f-metric").value = v.metric || "";
   const clubs = [`<option value="">${esc(t.none)}</option>`];
   if (S.info) for (const s of ["home", "away"]) clubs.push(`<option value="${s}">${esc(S.info[s].name)}</option>`);
   $("f-club").innerHTML = clubs.join("");
@@ -313,7 +343,10 @@ function buildSelectors() {
   $("f-player").value = v.player;
 }
 function onViewerChange() {
-  S.viewer = { mode: $("f-mode").value, lang: $("f-lang").value, club: $("f-club").value, player: $("f-player").value };
+  S.viewer = {
+    mode: $("f-mode").value, lang: $("f-lang").value, club: $("f-club").value,
+    player: $("f-player").value, metric: $("f-metric").value,
+  };
   if (S.viewer.mode === "player_focus" && !S.viewer.player && S.info) {
     // player focus needs a player: default to the first outfield player of the favourite club
     const side = S.viewer.club || "home";
@@ -329,7 +362,7 @@ function onViewerChange() {
   renderFan();
   refreshPersonal();
 }
-["f-lang", "f-mode", "f-club", "f-player"].forEach((id) => $(id).addEventListener("change", onViewerChange));
+["f-lang", "f-mode", "f-club", "f-player", "f-metric"].forEach((id) => $(id).addEventListener("change", onViewerChange));
 
 function renderFan() {
   const el = $("fan-feed");

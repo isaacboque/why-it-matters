@@ -290,6 +290,8 @@ def test_cues_have_clean_json_for_a_graphics_partner(orch):
 
 # ---------------------------------------------------------------- end to end
 def _budget_ok(o):
+    """When a non-goal cue airs, no rolling window containing it holds more than `budget` cues.
+    (Goals always air, so a goal can later push a window over: that is by design.)"""
     w = o.producer.window_s
     times = [c.t_in for c in o.cues]
     for cue in o.cues:
@@ -297,7 +299,8 @@ def _budget_ok(o):
             continue
         for start in times:
             if start <= cue.t_in < start + w:
-                assert sum(start <= t < start + w for t in times) <= o.producer.budget
+                aired = sum(start <= t <= cue.t_in for t in times)
+                assert aired <= o.producer.budget
 
 
 @pytest.mark.parametrize("seed", range(5))

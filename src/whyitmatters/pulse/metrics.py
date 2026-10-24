@@ -7,6 +7,21 @@ Definitions (all from the acting team's perspective, attacking left to right):
   (tackle, interception, foul) the team makes in its attacking 60% (x >= 42). Lower = more pressing.
 - tempo: passes per minute of possession
 - losses: open-play possession losses (tackle won, interception, pass out of play)
+
+Tactical metrics (also from the acting team's perspective; SPEC.md has the one-line versions):
+- duels: every tackle (won or lost) and interception; the winner is credited, in their own
+  coordinates, to the defensive (x < 35), middle (35 <= x < 70) or attacking (x >= 70) third
+- duel_share_<zone>: a team's duels won in a zone / (its wins + the opponent's wins in the same
+  physical area, i.e. the mirrored zone). None when nobody won a duel there
+- high_recoveries / final_third_recoveries: ball won (tackle won or interception)
+  at x >= 52.5 / x >= 70
+- counter_press: ball won back within 5 s of the same team losing it
+- own_half_losses: possession lost at x < 52.5 (dangerous losses)
+- progressive_passes: completed passes that move the ball >= 10 m towards goal
+  or into the final third
+- long_ball_share: share of a team's passes that travel >= 30 m
+- central_buildup_share: share of build-up passes (x <= 63) started in the central
+  third of the pitch width
 """
 
 from __future__ import annotations
@@ -16,12 +31,47 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-from whyitmatters.schema import Event, EventType, Outcome, Side
+from whyitmatters.schema import PITCH_LENGTH, PITCH_WIDTH, Event, EventType, Outcome, Side
 
 FINAL_THIRD_X = 70.0
 PRESS_ZONE_X = 42.0  # defender's attacking 60%
 BUILD_UP_X = 63.0  # attacker's defensive 60%
 MAX_INPLAY_GAP = 20.0  # seconds; longer gaps are dead ball and not credited
+HALF_X = PITCH_LENGTH / 2
+DEFENSIVE_THIRD_X = 35.0
+COUNTER_PRESS_S = 5.0
+PROGRESSIVE_M = 10.0
+LONG_BALL_M = 30.0
+CENTRAL_Y = (PITCH_WIDTH / 3, 2 * PITCH_WIDTH / 3)
+ZONES = ("def", "mid", "att")
+
+
+def zone_of(x: float) -> str:
+    """Third of the pitch (in the acting team's coordinates)."""
+    return "def" if x < DEFENSIVE_THIRD_X else "mid" if x < FINAL_THIRD_X else "att"
+
+
+def duel_winner(ev: Event) -> tuple[Side, float] | None:
+    """Who won the duel an event records, and where, in the winner's own coordinates.
+
+    A tackle is a duel the tackler either wins or loses (a lost tackle is the ball carrier's
+    win, seen from the other end of the pitch); an interception is always a win. Other events
+    are not duels.
+    """
+    if ev.type == EventType.INTERCEPTION or (
+        ev.type == EventType.TACKLE and ev.outcome == Outcome.WON
+    ):
+        return ev.side, ev.x
+    if ev.type == EventType.TACKLE:
+        return ("away" if ev.side == "home" else "home"), PITCH_LENGTH - ev.x
+    return None
+
+
+def is_recovery(ev: Event) -> bool:
+    """The acting team wins the ball: a successful tackle or an interception."""
+    return ev.type == EventType.INTERCEPTION or (
+        ev.type == EventType.TACKLE and ev.outcome == Outcome.WON
+    )
 
 
 @dataclass
@@ -39,6 +89,16 @@ class SideMinute:
     shots: int = 0
     xg: float = 0.0
     goals: int = 0
+    duels_def: int = 0  # duels this team won, by third (own coordinates)
+    duels_mid: int = 0
+    duels_att: int = 0
+    high_recoveries: int = 0
+    final_third_recoveries: int = 0
+    counter_press: int = 0
+    own_half_losses: int = 0
+    progressive_passes: int = 0
+    long_balls: int = 0
+    central_build_up_passes: int = 0
     evidence: list[str] = field(default_factory=list)  # event ids worth citing
 
 
@@ -54,6 +114,21 @@ class TeamWindow(BaseModel):
     shots: int
     xg: float
     goals: int
+    # tactical metrics (see the module docstring)
+    passes: int = 0
+    duels_won_def: int = 0
+    duels_won_mid: int = 0
+    duels_won_att: int = 0
+    duel_share_def: float | None = None
+    duel_share_mid: float | None = None
+    duel_share_att: float | None = None
+    high_recoveries: int = 0
+    final_third_recoveries: int = 0
+    counter_press: int = 0
+    own_half_losses: int = 0
+    progressive_passes: int = 0
+    long_ball_share: float = 0.0
+    central_buildup_share: float = 0.0
 
 
 class WindowMetrics(BaseModel):
@@ -77,6 +152,7 @@ class MinuteCounter:
         self.last_t: float | None = None
         self.last_period: int | None = None
         self.max_minute = 0
+        self.last_loss_t: dict[Side, float] = {}  # when each team last lost the ball
 
     def ingest(self, ev: Event) -> None:
         b = self.buckets[ev.minute]
@@ -103,10 +179,18 @@ class MinuteCounter:
                 self.chain_passes += 1
                 if ev.outcome == Outcome.COMPLETE:
                     s.passes_complete += 1
+                    if ev.end_x is not None and (
+                        ev.end_x - ev.x >= PROGRESSIVE_M or (ev.x < FINAL_THIRD_X <= ev.end_x)
+                    ):
+                        s.progressive_passes += 1
                 if ev.x >= FINAL_THIRD_X:
                     s.final_third_passes += 1
                 if ev.x <= BUILD_UP_X:
                     s.build_up_passes += 1
+                    if CENTRAL_Y[0] <= ev.y <= CENTRAL_Y[1]:
+                        s.central_build_up_passes += 1
+                if (ev.pass_distance or 0.0) >= LONG_BALL_M:
+                    s.long_balls += 1
         elif ev.type == EventType.SHOT:
             s.shots += 1
             s.xg += ev.xg or 0.0
@@ -120,16 +204,37 @@ class MinuteCounter:
         elif ev.type in (EventType.TACKLE, EventType.INTERCEPTION, EventType.FOUL):
             if ev.x >= PRESS_ZONE_X:
                 s.press_actions += 1
+            duel = duel_winner(ev)
+            if duel is not None:
+                winner, wx = duel
+                setattr(
+                    b[winner],
+                    f"duels_{zone_of(wx)}",
+                    getattr(b[winner], f"duels_{zone_of(wx)}") + 1,
+                )
             won = ev.type == EventType.INTERCEPTION or ev.outcome == Outcome.WON
             if won and ev.type != EventType.FOUL:
+                if ev.x >= HALF_X:
+                    s.high_recoveries += 1
+                if ev.x >= FINAL_THIRD_X:
+                    s.final_third_recoveries += 1
+                lost_at = self.last_loss_t.get(ev.side)
+                if lost_at is not None and 0 <= ev.t - lost_at <= COUNTER_PRESS_S:
+                    s.counter_press += 1
                 if self.poss_side == other:
                     b[other].losses += 1
                     b[other].evidence.append(ev.id)
+                    if PITCH_LENGTH - ev.x < HALF_X:
+                        b[other].own_half_losses += 1
+                    self.last_loss_t[other] = ev.t
                     self._close_chain(b, turnover=True)
                 self.poss_side = ev.side
         elif ev.type == EventType.BALL_OUT:
             if self.poss_side == ev.side:
                 s.losses += 1
+                if ev.x < HALF_X:
+                    s.own_half_losses += 1
+                self.last_loss_t[ev.side] = ev.t
                 self._close_chain(b, turnover=True)
             self.poss_side = None
         elif ev.type == EventType.HALF_END:
@@ -157,9 +262,29 @@ class MinuteCounter:
             for side in ("home", "away"):
                 src, dst = self.buckets[m][side], agg[side]
                 for f in (
-                    "poss_seconds", "passes", "passes_complete", "final_third_passes",
-                    "build_up_passes", "press_actions", "pressures", "losses", "chains",
-                    "short_chains", "shots", "xg", "goals",
+                    "poss_seconds",
+                    "passes",
+                    "passes_complete",
+                    "final_third_passes",
+                    "build_up_passes",
+                    "press_actions",
+                    "pressures",
+                    "losses",
+                    "chains",
+                    "short_chains",
+                    "shots",
+                    "xg",
+                    "goals",
+                    "duels_def",
+                    "duels_mid",
+                    "duels_att",
+                    "high_recoveries",
+                    "final_third_recoveries",
+                    "counter_press",
+                    "own_half_losses",
+                    "progressive_passes",
+                    "long_balls",
+                    "central_build_up_passes",
                 ):
                     setattr(dst, f, getattr(dst, f) + getattr(src, f))
                 evidence.extend(src.evidence)
@@ -168,9 +293,32 @@ class MinuteCounter:
         total_poss = h.poss_seconds + a.poss_seconds or 1.0
         total_ft = h.final_third_passes + a.final_third_passes
 
+        def duel_share(mine: int, theirs_mirrored: int) -> float | None:
+            total = mine + theirs_mirrored
+            return round(mine / total, 3) if total else None
+
         def team(me: SideMinute, opp: SideMinute) -> TeamWindow:
             poss_min = me.poss_seconds / 60.0
             return TeamWindow(
+                passes=me.passes,
+                duels_won_def=me.duels_def,
+                duels_won_mid=me.duels_mid,
+                duels_won_att=me.duels_att,
+                # the opponent's wins in the mirrored third are the same patch of grass
+                duel_share_def=duel_share(me.duels_def, opp.duels_att),
+                duel_share_mid=duel_share(me.duels_mid, opp.duels_mid),
+                duel_share_att=duel_share(me.duels_att, opp.duels_def),
+                high_recoveries=me.high_recoveries,
+                final_third_recoveries=me.final_third_recoveries,
+                counter_press=me.counter_press,
+                own_half_losses=me.own_half_losses,
+                progressive_passes=me.progressive_passes,
+                long_ball_share=round(me.long_balls / me.passes, 3) if me.passes else 0.0,
+                central_buildup_share=(
+                    round(me.central_build_up_passes / me.build_up_passes, 3)
+                    if me.build_up_passes
+                    else 0.0
+                ),
                 possession_share=round(me.poss_seconds / total_poss, 3),
                 pass_completion=round(me.passes_complete / me.passes, 3) if me.passes else 0.0,
                 field_tilt=round(me.final_third_passes / total_ft, 3) if total_ft else 0.5,

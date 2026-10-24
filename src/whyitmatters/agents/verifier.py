@@ -6,8 +6,17 @@ from __future__ import annotations
 
 from whyitmatters.agents.blackboard import Blackboard
 from whyitmatters.agents.generator import fmt, numbers_in
-from whyitmatters.agents.models import Claim, ClaimCheck, Draft, Lang, Verdict
+from whyitmatters.agents.models import (
+    TEAM_WINDOW_METRICS,
+    Claim,
+    ClaimCheck,
+    Draft,
+    Lang,
+    Verdict,
+)
+from whyitmatters.pulse.buildup import analyse_buildup
 from whyitmatters.pulse.metrics import MinuteCounter
+from whyitmatters.schema import EventType
 
 # Absolute slack on top of a claim's own tolerance, for float noise only
 EPS = 1e-6
@@ -40,7 +49,7 @@ class Verifier:
 
     def resolve(self, state: Blackboard, c: Claim) -> float | None:
         """The true value of a claim, recomputed from the raw event stream."""
-        if c.metric in ("possession_share", "pass_completion", "field_tilt", "turnovers_per_min"):
+        if c.metric in TEAM_WINDOW_METRICS or c.metric == "turnovers_per_min":
             if c.window is None:
                 return None
             start, end = c.window
@@ -50,7 +59,8 @@ class Verifier:
             if c.side is None:
                 return None
             team = w.home if c.side == "home" else w.away
-            return float(getattr(team, c.metric))
+            value = getattr(team, c.metric)
+            return None if value is None else float(value)
         if c.metric == "window_minutes":
             return float(c.window[1] - c.window[0] + 1) if c.window else None
         if c.metric == "team_xg":
@@ -69,8 +79,19 @@ class Verifier:
             return float(ev.score_home)
         if c.metric == "score_away":
             return float(ev.score_away)
-        if c.metric == "carry_speed_kmh":
+        if c.metric in ("carry_speed_kmh", "shot_speed_kmh"):
             return ev.ball_speed_kmh
+        if c.metric == "pass_difficulty":
+            return ev.pass_difficulty
+        if c.metric in ("buildup_seconds", "counter_press_in_move", "long_balls_in_move"):
+            if ev.type != EventType.SHOT:
+                return None
+            move = analyse_buildup(state.log, ev)
+            if c.metric == "long_balls_in_move":
+                return float(move.long_balls)
+            if c.metric == "counter_press_in_move":
+                return float(move.counter_press)
+            return move.seconds
         if c.metric == "player_completed_passes":
             st = state.stats.get(c.player_id or "")
             return float(st.completed_at[ev.id]) if st and ev.id in st.completed_at else None

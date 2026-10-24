@@ -17,7 +17,9 @@ Built for the Microsoft × Premier League **Inside the Game: Developer Hackathon
 | Explain | Agent team: Blackboard, Analyst, Explainer, Verifier, Producer, Recap, orchestrator + event bus (offline, deterministic) | done |
 | Render | Overlay cue JSON with on-air budget, full-time recap | done |
 | Render | FastAPI (SSE stream, overlay cue JSON), Studio / Fan / Trust views, Docker | done |
-| Personalize | Analyst / fan / player-focus modes, EN · ES · CA, re-verified | done |
+| Interpret | Tactical engine: duels by zone, high recoveries, counter-press, dangerous losses, progressive passes, long-ball share, driver attribution, build-up of goals | done |
+| Explain | Cause → effect insights (press surge, midfield battle, dangerous turnovers, going long), hardest pass, fastest shot; every driver is a Verifier-checked claim | done |
+| Personalize | Analyst / fan / player-focus / coach modes, "My metric" thread, EN · ES · CA, re-verified | done |
 
 See [SPEC.md](SPEC.md) for the problem, users, success criteria and architecture.
 
@@ -36,9 +38,11 @@ The agent team is scored on seeds 0–19 (offline template generator):
 | Measure | Result |
 | --- | --- |
 | Truth Score (claims passing the Verifier) | 1.00 |
-| Truth Score with a model that mis-states 30 % of first drafts | 0.91 raw; first-draft accuracy 0.65; every retry recovers; on-air accuracy 1.00 |
-| Cues per match | 11.9 (6–16); goals always air |
-| Latency per insight | 1.4 ms mean, 16 ms max; a whole match runs in under 0.1 s |
+| Truth Score with a model that mis-states 30 % of first drafts | 0.92 raw; first-draft accuracy 0.65; every retry recovers; on-air accuracy 1.00 |
+| Cues per match | 18.2 (15–22); goals always air |
+| Insights per match | 18.6: 6.6 control/chaos shifts, 2.3 goals, 2.0 press surges, 1.4 dangerous turnovers, 0.7 going long, 0.6 midfield battles, 1.4 hardest passes, 0.8 fastest shots, plus chances, top speed, passing milestones |
+| Driver attribution: a pressing metric is among the top drivers of a correctly detected control shift | 72 % (46/64) on tuning seeds 0–19; 86 % (63/73) on held-out seeds 1000–1019 |
+| Latency per insight | 2.2 ms mean, 18 ms max; a whole match runs in about 0.13 s |
 
 ## Quick start
 
