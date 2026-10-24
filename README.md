@@ -16,7 +16,7 @@ Built for the Microsoft × Premier League **Inside the Game: Developer Hackathon
 | Interpret | Match Pulse engine (control/chaos, PPDA, field tilt, rhythm) | done |
 | Explain | Agent team: Blackboard, Analyst, Explainer, Verifier, Producer, Recap, orchestrator + event bus (offline, deterministic) | done |
 | Render | Overlay cue JSON with on-air budget, full-time recap | done |
-| Render | Studio view, fan view, API | planned |
+| Render | FastAPI (SSE stream, overlay cue JSON), Studio / Fan / Trust views, Docker | done |
 | Personalize | Analyst / fan / player-focus modes, EN · ES · CA, re-verified | done |
 
 See [SPEC.md](SPEC.md) for the problem, users, success criteria and architecture.
@@ -50,6 +50,19 @@ python -m whyitmatters.eval --seeds 20                          # detection qual
 python -m whyitmatters.agents --seed 7 --mode fan --lang ca     # the agent team on a match (add --faults 0.3 to see the Verifier work)
 pytest
 ```
+
+### Run the app
+
+```bash
+pip install -e ".[api]" && uvicorn whyitmatters.api:app --port 8000   # then open http://localhost:8000
+```
+
+or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`.
+
+- **Studio** — pitch with recent events, Match Pulse chart (dominance and chaos), the cue rail with a **Why?** drawer showing evidence and the Verifier's verdict.
+- **Fan** — plain-language cues in EN / ES / CA, favourite club and player, player-focus mode.
+- **Trust** — live Truth Score, rejected claims, retries, latency and detection precision/recall. Tick *Unreliable model* to watch the Verifier catch mis-stated numbers.
+- API docs at `/docs`; overlay cues for a graphics partner at `GET /matches/{seed}/cues`; live feed at `GET /matches/{seed}/stream` (Server-Sent Events, a 90-minute match in ~3 minutes, `?duration=0` for instant).
 
 ## License
 
