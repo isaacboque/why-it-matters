@@ -5,7 +5,8 @@ __pycache__/
 .env
 .pytest_cache/
 .ruff_cache/
-dist/
+dist/*
+!dist/demo/
 build/
 node_modules/
 *.jsonl
