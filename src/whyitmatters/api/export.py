@@ -30,7 +30,8 @@ from pathlib import Path
 from typing import Any, get_args
 
 from whyitmatters.agents import Orchestrator, run_match
-from whyitmatters.agents.models import Lang, Mode, Viewer
+from whyitmatters.agents.generator import TEMPLATE_LANGS
+from whyitmatters.agents.models import Mode, Viewer
 from whyitmatters.api.app import _eval, build_feed
 from whyitmatters.simulator import simulate
 
@@ -38,7 +39,7 @@ WEB_DIR = Path(__file__).resolve().parents[3] / "web"
 FAULT_RATE = 0.3
 EVAL_SEEDS = 20
 FOCUS_PLAYERS = 3
-LANGS: tuple[str, ...] = get_args(Lang)
+LANGS: tuple[str, ...] = TEMPLATE_LANGS
 MODES: tuple[str, ...] = tuple(m for m in get_args(Mode) if m != "player_focus")
 SIZE_BUDGET = 5_000_000
 

@@ -114,6 +114,12 @@ canvas { width: 100%; display: block; border-radius: 8px; }
 .fan-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .fan-controls label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
 .fan-controls select { width: 100%; color: var(--ink); font-size: 15px; }
+.fan-controls input[type="text"] { width: 100%; font-size: 14px; }
+.notice {
+  max-width: 720px; margin: 0 auto 12px; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--alert); color: var(--ink); background: color-mix(in srgb, var(--panel) 92%, var(--alert));
+  font-size: 13px;
+}
 .fan-feed { max-width: 720px; margin: 0 auto; }
 .fan-feed .cue h3 { font-size: 18px; }
 .fan-feed .cue p { font-size: 16px; }

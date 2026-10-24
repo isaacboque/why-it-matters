@@ -9,7 +9,7 @@ from __future__ import annotations
 from whyitmatters.agents.blackboard import Blackboard
 from whyitmatters.agents.drivers import DRIVERS, driver_claims, drivers_of
 from whyitmatters.agents.faults import FaultInjector
-from whyitmatters.agents.generator import TemplateGenerator, TextGenerator
+from whyitmatters.agents.generator import TemplateGenerator, TextGenerator, render_with_source
 from whyitmatters.agents.models import Claim, Draft, InsightCandidate, Verdict
 from whyitmatters.agents.texts_tactics import ADVICE_FOR
 from whyitmatters.pulse.buildup import MAX_MOVE_S, MIN_MOVE_S, analyse_buildup
@@ -66,8 +66,14 @@ class Explainer:
         template, slots, claims = self._compose(state, cand)
         if attempt == 1 and self.faults is not None:
             claims = self.faults.corrupt(claims)
-        headline, body = self.generator.render(template, "analyst", "en", slots, claims)
-        slots = {**slots, "template": template, "tags": ",".join(tags_for(template, slots))}
+        out = render_with_source(self.generator, template, "analyst", "en", slots, claims)
+        headline, body = out.headline, out.body
+        slots = {
+            **slots,
+            "template": template,
+            "tags": ",".join(tags_for(template, slots)),
+            "written_by": out.source,
+        }
         return Draft(
             candidate_id=cand.id,
             attempt=attempt,

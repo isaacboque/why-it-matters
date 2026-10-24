@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from whyitmatters.agents.blackboard import Blackboard
 from whyitmatters.agents.generator import fmt, numbers_in
+from whyitmatters.agents.guardrails import brief_names, known_names, name_violations
 from whyitmatters.agents.models import (
     TEAM_WINDOW_METRICS,
     Claim,
@@ -139,13 +140,22 @@ class Verifier:
                 missing.append(n)
         return missing
 
+    @staticmethod
+    def unsupported_names(state: Blackboard, text: str, slots: dict[str, str]) -> list[str]:
+        """Known teams or players the text mentions that the insight's brief does not name."""
+        teams, players = known_names(state.meta)
+        return name_violations(text, brief_names(slots), teams, players)
+
     def run(self, state: Blackboard, draft: Draft, lang: Lang = "en") -> Verdict:
         checks = self.check_claims(state, draft.claims)
-        unsupported = self.unsupported_numbers(f"{draft.headline} {draft.body}", draft.claims, lang)
+        text = f"{draft.headline} {draft.body}"
+        unsupported = self.unsupported_numbers(text, draft.claims, lang)
+        names = self.unsupported_names(state, text, draft.slots)
         return Verdict(
             candidate_id=draft.candidate_id,
             attempt=draft.attempt,
-            ok=all(c.ok for c in checks) and not unsupported,
+            ok=all(c.ok for c in checks) and not unsupported and not names,
             checks=checks,
             unsupported_numbers=unsupported,
+            unsupported_names=names,
         )

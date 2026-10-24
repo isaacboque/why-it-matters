@@ -88,7 +88,8 @@ function fmtVal(unit, v) {
   if (unit === "rate") return v.toFixed(1);
   return String(Math.round(v));
 }
-const T = () => I18N[S.viewer.lang] || I18N.en;
+const baseLang = (lang) => String(lang || "en").split("-")[0].toLowerCase();
+const T = () => I18N[baseLang(S.viewer.lang)] || I18N.en;
 const teamName = (side) => (S.info ? S.info[side].name : side === "home" ? "Home" : "Away");
 const teamShort = (side) => (S.info ? S.info[side].short_name || S.info[side].name : side === "home" ? "HOM" : "AWY");
 
@@ -99,7 +100,11 @@ function humanReason(r) {
   const unit = UNITS[m[1]];
   return `${METRICS[m[1]] || m[1]}: stated ${fmtVal(unit, +m[2])}, match state ${fmtVal(unit, +m[3])}`;
 }
-const failureList = (v) => [...v.failures.map(humanReason), ...v.unsupported_numbers.map((n) => `unsupported number ${n}`)].join("; ");
+const failureList = (v) => [
+  ...v.failures.map(humanReason),
+  ...v.unsupported_numbers.map((n) => `unsupported number ${n}`),
+  ...(v.unsupported_names || []).map((n) => `mentions ${n}, who is not in the brief`),
+].join("; ");
 
 // ----------------------------------------------------------------------------- stream
 // One handler per message type; the live SSE stream and the static replay both feed them.
@@ -212,7 +217,7 @@ async function refreshPersonal() {
   const token = ++personalToken;
   const v = S.viewer;
   if (STATIC) return refreshPersonalStatic(token);
-  const q =new URLSearchParams({ mode: v.mode, lang: v.lang, faults: $("faults").checked ? 0.3 : 0 });
+  const q = new URLSearchParams({ mode: v.mode, lang: v.lang, faults: $("faults").checked ? 0.3 : 0 });
   if (v.club) q.set("club", v.club);
   if (v.player) q.set("player", v.player);
   if (v.metric) q.set("metric", v.metric);
@@ -227,11 +232,17 @@ async function refreshPersonal() {
 const focusPlayers = () => (MANIFEST.seeds[S.seed] || { focus_players: [] }).focus_players;
 async function refreshPersonalStatic(token) {
   const v = S.viewer;
+  const recorded = ["en", "es", "ca"].includes(baseLang(v.lang));
+  const lang = recorded ? baseLang(v.lang) : "en"; // only these three were pre-recorded
   const name = v.mode === "player_focus"
-    ? `player_focus-${focusPlayers().includes(v.player) ? v.player : focusPlayers()[0]}-${v.lang}`
-    : `${v.mode}-${v.lang}`;
+    ? `player_focus-${focusPlayers().includes(v.player) ? v.player : focusPlayers()[0]}-${lang}`
+    : `${v.mode}-${lang}`;
   try {
     const body = await (await fetch(`data/${S.seed}/personal-${name}.json`)).json();
+    if (!recorded) {
+      body.cues.forEach((c) => { c.translation_unavailable = true; });
+      body.recap.translation_unavailable = true;
+    }
     body.cues.forEach((c) => { c.for_you = (!!v.club && c.side === v.club) || (!!v.player && c.player_id === v.player); });
     // "My metric" is applied here, like the API does: one thread only, goals always show
     if (v.metric) body.cues = body.cues.filter((c) => c.kind === "goal" || (c.tags || []).includes(v.metric));
@@ -305,7 +316,7 @@ function openWhy(id) {
     <h2>Key events in this window</h2>
     <table><tr><th>Event</th><th>Min</th><th>Type</th><th>Who</th><th>Result</th></tr>${evidence}</table>
     <h2>Drafting</h2><ul>${history}</ul>
-    <p class="legend">Recomputed from the raw event stream · ${w.attempts} draft${w.attempts > 1 ? "s" : ""} · ${w.latency_ms.toFixed(1)} ms to verify and publish · on screen ${clock(c.t_in)}–${clock(c.t_out)}</p>`;
+    <p class="legend">Written by: ${esc(WRITTEN_BY[c.slots && c.slots.written_by] || "template")} · Recomputed from the raw event stream · ${w.attempts} draft${w.attempts > 1 ? "s" : ""} · ${w.latency_ms.toFixed(1)} ms to verify and publish · on screen ${clock(c.t_in)}–${clock(c.t_out)}</p>`;
   $("why").showModal();
 }
 document.addEventListener("click", (e) => {
@@ -322,7 +333,10 @@ function buildSelectors() {
   $("l-lang").textContent = t.lang; $("l-mode").textContent = t.mode;
   $("l-club").textContent = t.club; $("l-player").textContent = t.player;
   $("l-metric").textContent = t.metric;
-  $("f-lang").value = v.lang;
+  const listed = [...$("f-lang").options].some((o) => o.value === v.lang && o.value !== "other");
+  $("f-lang").value = listed ? v.lang : "other";
+  $("f-lang-other").hidden = listed;
+  $("f-lang-other").value = listed ? "" : v.lang;
   $("f-mode").innerHTML = MODES.map((m) => `<option value="${m}">${esc({ fan: t.fan, player_focus: t.focus, analyst: t.analyst, coach: t.coach }[m])}</option>`).join("");
   $("f-mode").value = v.mode;
   $("f-metric").innerHTML = [`<option value="">${esc(t.all)}</option>`,
@@ -342,11 +356,19 @@ function buildSelectors() {
   $("f-player").innerHTML = players.join("");
   $("f-player").value = v.player;
 }
+const LANG_RE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$/;
+function pickedLang() {
+  const sel = $("f-lang").value;
+  if (sel !== "other") return sel;
+  const typed = $("f-lang-other").value.trim();
+  return LANG_RE.test(typed) ? typed : (S.viewer.lang || "en"); // not a language code: keep the last good one
+}
 function onViewerChange() {
   S.viewer = {
-    mode: $("f-mode").value, lang: $("f-lang").value, club: $("f-club").value,
+    mode: $("f-mode").value, lang: pickedLang(), club: $("f-club").value,
     player: $("f-player").value, metric: $("f-metric").value,
   };
+  $("f-lang-other").hidden = $("f-lang").value !== "other";
   if (S.viewer.mode === "player_focus" && !S.viewer.player && S.info) {
     // player focus needs a player: default to the first outfield player of the favourite club
     const side = S.viewer.club || "home";
@@ -358,22 +380,34 @@ function onViewerChange() {
   buildSelectors();
   S.viewer = keep;
   document.documentElement.lang = S.viewer.lang;
+  $("fan-feed").dir = ["ar", "he", "fa", "ur"].includes(baseLang(S.viewer.lang)) ? "rtl" : "ltr";
   renderScoreboards();
   renderFan();
   refreshPersonal();
 }
-["f-lang", "f-mode", "f-club", "f-player", "f-metric"].forEach((id) => $(id).addEventListener("change", onViewerChange));
+["f-lang", "f-lang-other", "f-mode", "f-club", "f-player", "f-metric"].forEach((id) => $(id).addEventListener("change", onViewerChange));
 
+const WRITTEN_BY = { model: "model", template: "template", template_fallback: "template fallback", other: "custom" };
 function renderFan() {
   const el = $("fan-feed");
   const t = T();
-  const cues = S.personal ? S.personal.cues.filter((c) => S.ended || c.t_in <= S.matchT) : [];
+  const p = S.personal;
+  const flagged = p && (p.cues.some((c) => c.translation_unavailable) || (p.recap && p.recap.translation_unavailable));
+  $("fan-notice").hidden = !flagged;
+  if (flagged) {
+    $("fan-notice").textContent = STATIC
+      ? `No pre-recorded text in “${S.viewer.lang}”: showing English. The static demo has English, Spanish and Catalan; run the API with WIM_GENERATOR=llm for any other language.`
+      : `Translation unavailable for “${S.viewer.lang}”: showing English. The offline writer covers English, Spanish and Catalan; start the API with WIM_GENERATOR=llm (docs/LLM.md) to write in any language.`;
+  }
+  const cues = p ? p.cues.filter((c) => S.ended || c.t_in <= S.matchT) : [];
   if (!cues.length) { el.innerHTML = `<div class="empty">${esc(t.empty)}</div>`; return; }
   el.innerHTML = [...cues].reverse().map((c) => `
     <article class="cue ${c.kind === "goal" ? "goal" : ""} ${c.for_you ? "you" : ""}">
       <div class="meta"><span class="min">${c.minute}'</span>
         ${c.for_you ? `<span class="tag ok">${esc(t.foryou)}</span>` : ""}
-        <span class="tag">${esc(t.verified)}</span></div>
+        <span class="tag">${esc(t.verified)}</span>
+        ${c.written_by === "model" ? `<span class="tag ok" title="written by the model, checked before airing">model</span>` : ""}
+        ${c.written_by === "template_fallback" ? `<span class="tag bad" title="the model's text was rejected">template fallback</span>` : ""}</div>
       <h3>${esc(c.headline)}</h3><p>${esc(c.body)}</p></article>`).join("");
 }
 
@@ -394,6 +428,8 @@ function renderTrust() {
     stat("Claims rejected", tr.claims_rejected, "caught before air"),
     stat("Retried drafts", tr.retries, `first-draft accuracy ${pct(tr.first_draft_accuracy)}`),
     stat("Dropped", tr.dropped, "never passed verification"),
+    stat("Written by", `${tr.written_by_model ?? 0} model`,
+      `${tr.written_by_fallback ?? 0} template fallback · ${tr.written_by_template ?? 0} template`),
     stat("Insight latency", `${tr.latency_ms_mean.toFixed(1)} ms`, `p95 ${tr.latency_ms_p95.toFixed(1)} ms`),
     stat("Insights → cues", `${tr.insights} → ${tr.cues}`, "on-air budget: 3 per 5 min, goals always air"),
     stat("Shift recall", ev ? pct(ev.recall) : "—", "vs planted ground truth", false, BENCH),
