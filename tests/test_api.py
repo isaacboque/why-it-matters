@@ -153,3 +153,23 @@ def test_web_theme_palette_and_short_names(client):
     assert "short_name" in client.get("/app.js").text
     info = client.get(f"/matches/{SEED}").json()
     assert info["home"]["short_name"] and info["away"]["short_name"]
+
+
+def test_static_export_is_self_contained(tmp_path):
+    import json
+
+    from whyitmatters.api.export import SIZE_BUDGET, export_demo
+
+    m = export_demo([7], tmp_path / "demo")
+    assert m["bytes"] < SIZE_BUDGET
+    for name in ("index.html", "app.js", "style.css"):
+        assert (tmp_path / "demo" / name).is_file()
+    for rel in m["files"]:
+        assert json.loads((tmp_path / "demo" / rel).read_text(encoding="utf-8")) is not None
+    focus = m["seeds"]["7"]["focus_players"]
+    assert len(focus) == 3
+    assert f"data/7/personal-player_focus-{focus[0]}-ca.json" in m["files"]
+    assert "data/7/personal-fan-es.json" in m["files"] and "data/eval.json" in m["files"]
+    feed = json.loads((tmp_path / "demo/data/7/stream-faults.json").read_text(encoding="utf-8"))
+    assert any(r["type"] == "verdict" and not r["data"]["ok"] for r in feed)
+    assert any(r["type"] == "recap" for r in feed)

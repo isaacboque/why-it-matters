@@ -41,6 +41,9 @@ const KINDS = { goal: "goal", state_shift: "shift", big_chance: "chance", top_sp
 
 const S = {};
 let es = null;
+let STATIC = false; // no backend: replay the pre-recorded files under data/
+let MANIFEST = null; // data/index.json
+let replayToken = 0;
 let personalToken = 0;
 let drawQueued = false;
 
@@ -77,37 +80,68 @@ function humanReason(r) {
 const failureList = (v) => [...v.failures.map(humanReason), ...v.unsupported_numbers.map((n) => `unsupported number ${n}`)].join("; ");
 
 // ----------------------------------------------------------------------------- stream
-function openStream() {
-  const pace = $("pace").value;
-  const faults = $("faults").checked ? 0.3 : 0;
-  es = new EventSource(`/matches/${S.seed}/stream?duration=${pace}&faults=${faults}`);
-  const on = (type, fn) =>
-    es.addEventListener(type, (e) => {
-      const m = JSON.parse(e.data);
-      if (m.t > S.matchT) S.matchT = m.t;
-      fn(m.data, m);
-    });
-
-  on("event", (d) => {
+// One handler per message type; the live SSE stream and the static replay both feed them.
+const handlers = {
+  event: (d) => {
     S.events.push(d);
     if (S.events.length > 80) S.events.shift();
     S.score = [d.score_home, d.score_away];
     schedule();
-  });
-  on("pulse", (d) => { S.pulses.push(d); renderFan(); schedule(); });
-  on("transition", (d) => { S.transitions.push(d); schedule(); });
-  on("verdict", (d) => { S.verdicts.push(d); if (S.verdicts.length > 300) S.verdicts.shift(); renderVerdicts(); });
-  on("cue", (d) => { S.cues.push(d); renderRail(); renderFan(); schedule(); });
-  on("trust", (d) => { S.trust = d; renderTrust(); });
-  on("recap", (d) => { S.recap = d; });
-  on("end", () => {
+  },
+  pulse: (d) => { S.pulses.push(d); renderFan(); schedule(); },
+  transition: (d) => { S.transitions.push(d); schedule(); },
+  verdict: (d) => { S.verdicts.push(d); if (S.verdicts.length > 300) S.verdicts.shift(); renderVerdicts(); },
+  cue: (d) => { S.cues.push(d); renderRail(); renderFan(); schedule(); },
+  trust: (d) => { S.trust = d; renderTrust(); },
+  recap: (d) => { S.recap = d; },
+  end: () => {
     S.ended = true;
-    es.close();
+    if (es) es.close();
     renderScoreboards();
     renderFan();
     schedule();
     showRecap();
-  });
+  },
+};
+function dispatch(type, m) {
+  const fn = handlers[type];
+  if (!fn) return;
+  if (m.t > S.matchT) S.matchT = m.t;
+  fn(m.data, m);
+}
+
+// Static mode: replay a pre-recorded bus (data/<seed>/stream-*.json) with the same pacing as the API.
+async function openStaticStream(pace, faults) {
+  const token = ++replayToken;
+  let feed;
+  try {
+    feed = await (await fetch(`data/${S.seed}/stream-${faults ? "faults" : "clean"}.json`)).json();
+  } catch (e) {
+    $("rail").innerHTML = `<div class="empty">Could not load the recording: ${esc(e.message)}</div>`;
+    return;
+  }
+  if (token !== replayToken) return;
+  const total = feed.reduce((m, r) => Math.max(m, r.t), 0) || 1;
+  const speed = pace > 0 ? total / pace : 0; // match seconds per real second; 0 = as fast as possible
+  const t0 = performance.now();
+  let i = 0;
+  const step = () => {
+    if (token !== replayToken) return;
+    const now = speed ? ((performance.now() - t0) / 1000) * speed : Infinity;
+    const stop = i + 300; // instant pace still yields to the UI every 300 records
+    while (i < feed.length && feed[i].t <= now && (speed || i < stop)) { dispatch(feed[i].type, feed[i]); i++; }
+    if (i < feed.length) setTimeout(step, speed ? 40 : 0);
+    else dispatch("end", { t: total, data: {} });
+  };
+  step();
+}
+
+function openStream() {
+  const pace = parseFloat($("pace").value);
+  const faults = $("faults").checked ? 0.3 : 0;
+  if (STATIC) { openStaticStream(pace, faults); return; }
+  es = new EventSource(`matches/${S.seed}/stream?duration=${pace}&faults=${faults}`);
+  for (const type of Object.keys(handlers)) es.addEventListener(type, (e) => dispatch(type, JSON.parse(e.data)));
   es.onerror = () => {
     // never let the browser auto-reconnect: that would replay the match from the start
     es.close();
@@ -118,14 +152,16 @@ function openStream() {
 
 async function start() {
   if (es) es.close();
+  replayToken++;
   const keep = S.viewer;
   reset();
   S.viewer = keep;
   S.seed = Math.max(0, Math.min(100000, parseInt($("seed").value, 10) || 0));
+  if (STATIC && !MANIFEST.seeds[S.seed]) S.seed = +Object.keys(MANIFEST.seeds)[0];
   $("seed").value = S.seed;
   $("recap").close?.();
   try {
-    S.info = await (await fetch(`/matches/${S.seed}`)).json();
+    S.info = await (await fetch(STATIC ? `data/${S.seed}/info.json` : `matches/${S.seed}`)).json();
   } catch (e) {
     $("rail").innerHTML = `<div class="empty">Could not load the match: ${esc(e.message)}</div>`;
     return;
@@ -145,7 +181,7 @@ async function start() {
 async function loadEval() {
   if (S.eval) return;
   try {
-    S.eval = await (await fetch("/eval?seeds=20")).json();
+    S.eval = await (await fetch(STATIC ? "data/eval.json" : "eval?seeds=20")).json();
     renderTrust();
   } catch { /* the trust panel just shows a dash */ }
 }
@@ -153,14 +189,29 @@ async function loadEval() {
 async function refreshPersonal() {
   const token = ++personalToken;
   const v = S.viewer;
-  const q = new URLSearchParams({ mode: v.mode, lang: v.lang, faults: $("faults").checked ? 0.3 : 0 });
+  if (STATIC) return refreshPersonalStatic(token);
+  const q =new URLSearchParams({ mode: v.mode, lang: v.lang, faults: $("faults").checked ? 0.3 : 0 });
   if (v.club) q.set("club", v.club);
   if (v.player) q.set("player", v.player);
   try {
-    const r = await fetch(`/matches/${S.seed}/personal?${q}`);
+    const r = await fetch(`matches/${S.seed}/personal?${q}`);
     const body = await r.json();
     if (token === personalToken && r.ok) { S.personal = body; renderFan(); }
   } catch { /* offline: fan view stays as is */ }
+}
+
+// Static mode: mode x lang files; favourite club and player only change `for_you`, applied here.
+const focusPlayers = () => (MANIFEST.seeds[S.seed] || { focus_players: [] }).focus_players;
+async function refreshPersonalStatic(token) {
+  const v = S.viewer;
+  const name = v.mode === "player_focus"
+    ? `player_focus-${focusPlayers().includes(v.player) ? v.player : focusPlayers()[0]}-${v.lang}`
+    : `${v.mode}-${v.lang}`;
+  try {
+    const body = await (await fetch(`data/${S.seed}/personal-${name}.json`)).json();
+    body.cues.forEach((c) => { c.for_you = (!!v.club && c.side === v.club) || (!!v.player && c.player_id === v.player); });
+    if (token === personalToken) { S.personal = body; renderFan(); }
+  } catch { /* missing file: fan view stays as is */ }
 }
 
 // ----------------------------------------------------------------------------- scoreboard
@@ -255,7 +306,7 @@ function buildSelectors() {
   if (S.info) {
     for (const s of ["home", "away"]) {
       players.push(`<optgroup label="${esc(S.info[s].name)}">${S.info[s].players
-        .map((p) => `<option value="${esc(p.id)}">${p.number} ${esc(p.name)}</option>`).join("")}</optgroup>`);
+        .map((p) => `<option value="${esc(p.id)}">${p.number} ${esc(p.name)}${STATIC && focusPlayers().includes(p.id) ? " ★" : ""}</option>`).join("")}</optgroup>`);
     }
   }
   $("f-player").innerHTML = players.join("");
@@ -268,6 +319,8 @@ function onViewerChange() {
     const side = S.viewer.club || "home";
     S.viewer.player = (S.info[side].players[9] || S.info[side].players[0]).id;
   }
+  // static demo: player focus is pre-recorded for the starred players only
+  if (STATIC && S.viewer.mode === "player_focus" && !focusPlayers().includes(S.viewer.player)) S.viewer.player = focusPlayers()[0];
   const keep = S.viewer;
   buildSelectors();
   S.viewer = keep;
@@ -471,4 +524,33 @@ document.querySelectorAll(".tab").forEach((tab) =>
 $("start").addEventListener("click", start);
 $("seed").addEventListener("keydown", (e) => { if (e.key === "Enter") start(); });
 window.addEventListener("resize", schedule);
-start();
+
+// Static mode when served without the API: `?static=1`, or /health is unreachable / not ours.
+async function detectStatic() {
+  if (new URLSearchParams(location.search).get("static") === "1") return true;
+  try {
+    const r = await fetch("health");
+    return !(r.ok && (await r.json()).status === "ok");
+  } catch { return true; }
+}
+function enableStaticUi() {
+  const sel = document.createElement("select");
+  sel.id = "seed";
+  sel.title = "Pre-recorded matches";
+  sel.innerHTML = Object.entries(MANIFEST.seeds)
+    .map(([s, m]) => `<option value="${esc(s)}">${esc(s)} · ${esc(m.home)} v ${esc(m.away)}</option>`).join("");
+  $("seed").replaceWith(sel);
+  sel.addEventListener("change", start);
+  document.querySelector("footer").insertAdjacentHTML("afterbegin",
+    "<b>Static demo:</b> pre-recorded matches replayed in your browser, no server involved. ");
+}
+async function boot() {
+  STATIC = await detectStatic();
+  if (STATIC) {
+    try { MANIFEST = await (await fetch("data/index.json")).json(); } catch { MANIFEST = null; }
+    if (!MANIFEST) { $("rail").innerHTML = `<div class="empty">No backend and no pre-recorded data found.</div>`; return; }
+    enableStaticUi();
+  }
+  start();
+}
+boot();

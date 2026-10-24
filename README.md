@@ -64,6 +64,10 @@ or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`.
 - **Trust** — live Truth Score, rejected claims, retries, latency and detection precision/recall. Tick *Unreliable model* to watch the Verifier catch mis-stated numbers.
 - API docs at `/docs`; overlay cues for a graphics partner at `GET /matches/{seed}/cues`; live feed at `GET /matches/{seed}/stream` (Server-Sent Events, a 90-minute match in ~3 minutes, `?duration=0` for instant).
 
+### Static demo (no backend)
+
+`python -m whyitmatters.api.export --seeds 7 11 23 --out dist/demo` writes a self-contained folder (the UI plus pre-recorded JSON, under 5 MB, relative paths only). It is committed in `dist/demo/`: serve it from any static host (or `python -m http.server -d dist/demo`) and the UI replays the recordings with the same pacing as the live stream. It is also the fallback if the hosted deploy is down.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
