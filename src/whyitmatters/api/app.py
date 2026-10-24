@@ -30,7 +30,7 @@ from pydantic import BaseModel
 
 from whyitmatters import __version__
 from whyitmatters.agents import Orchestrator, run_match
-from whyitmatters.agents.models import Cue, Lang, Mode, PersonalCue, Recap, Viewer
+from whyitmatters.agents.models import Cue, Lang, MetricTag, Mode, PersonalCue, Recap, Viewer
 from whyitmatters.eval import score_match, summarize
 from whyitmatters.eval.__main__ import EVAL_SEED_OFFSET
 from whyitmatters.schema import Match, MatchMeta, Side
@@ -239,13 +239,17 @@ def create_app() -> FastAPI:
         lang: Lang = "en",
         club: Side | None = None,
         player: str | None = None,
+        metric: Annotated[
+            MetricTag | None,
+            Query(description="'My metric': follow one thread only (goals always show)"),
+        ] = None,
         faults: float = Query(0.0, ge=0, le=1),
     ) -> PersonalResponse:
         """Cues and recap as one viewer sees them. Numbers are re-verified per viewer."""
         _, orch = _load(seed, faults)
         if player is not None and player not in orch.state.players:
             raise HTTPException(status_code=422, detail=f"unknown player {player!r}")
-        viewer = Viewer(mode=mode, lang=lang, club=club, player_id=player)
+        viewer = Viewer(mode=mode, lang=lang, club=club, player_id=player, metric=metric)
         return PersonalResponse(
             viewer=viewer, cues=orch.personalize(viewer), recap=orch.recap_for(viewer)
         )
