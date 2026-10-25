@@ -91,6 +91,7 @@ function reset() {
     seed: 7, info: null, matchT: 0, events: [], pulses: [], transitions: [], cues: [], verdicts: [],
     trust: null, eval: S.eval || null, score: [0, 0], recap: null, personal: null, ended: false,
     shots: [], hurt: [], live: null, // every shot; the passes that added most threat; the latest frame of all 22
+    pl: {}, plSort: S.plSort ?? 1, plTeam: S.plTeam || "both",
     railAll: false, layer: S.layer || "live", layerTeam: S.layerTeam || "home", h2hScope: S.h2hScope || "window",
     viewer: S.viewer || { mode: "fan", lang: "en", club: "", player: "", metric: "" },
   });
@@ -136,6 +137,7 @@ const handlers = {
     if (S.events.length > 80) S.events.shift();
     S.score = [d.score_home, d.score_away];
     if (d.fz) S.live = d;
+    tallyPlayer(d);
     if (d.type === "shot") S.shots.push(d);
     if (d.type === "pass" && d.xt >= 0.03) {
       S.hurt.push(d);
@@ -152,6 +154,7 @@ const handlers = {
   recap: (d) => { S.recap = d; },
   end: () => {
     S.ended = true;
+    renderPlayers();
     if (es) es.close();
     renderScoreboards();
     renderFan();
@@ -845,6 +848,123 @@ function drawPulse() {
     <span>line = 5-minute balance</span><span>tinted background = who controls the game (cyan = broken)</span><span>dot = goal · dashed = shift confirmed</span>`;
 }
 
+// ----------------------------------------------------------------------------- players
+function tallyPlayer(d) {
+  const id = d.player_id;
+  if (!id) return;
+  const p = (S.pl[id] ||= { passes: 0, done: 0, xt: 0, lb: 0, pk: 0, shots: 0, xg: 0, goals: 0, wins: 0, speed: 0 });
+  if (d.type === "pass") { p.passes++; if (d.outcome === "complete") p.done++; }
+  if (d.xt) p.xt += d.xt;
+  if (d.lb) p.lb++;
+  if (d.pk) p.pk += d.pk;
+  if (d.type === "shot") { p.shots++; p.xg += d.xg || 0; if (d.outcome === "goal") p.goals++; }
+  if (d.type === "interception" || (d.type === "tackle" && d.outcome === "won")) p.wins++;
+  if (d.type === "carry" && d.ball_speed_kmh) p.speed = Math.max(p.speed, d.ball_speed_kmh);
+}
+const PL_COLS = [
+  ["Passes", (p) => p.done, (p) => `${p.done}/${p.passes}`],
+  ["xT added", (p) => p.xt, (p) => p.xt.toFixed(2)],
+  ["Line breaks", (p) => p.lb, (p) => p.lb],
+  ["Bypassed", (p) => p.pk, (p) => p.pk],
+  ["Shots", (p) => p.shots, (p) => p.shots],
+  ["xG", (p) => p.xg, (p) => p.xg.toFixed(2)],
+  ["Goals", (p) => p.goals, (p) => p.goals],
+  ["Ball wins", (p) => p.wins, (p) => p.wins],
+  ["Top speed", (p) => p.speed, (p) => (p.speed ? `${Math.round(p.speed)} km/h` : "—")],
+];
+function playerRows() {
+  if (!S.info) return [];
+  const rows = [];
+  for (const side of ["home", "away"]) {
+    if (S.plTeam !== "both" && S.plTeam !== side) continue;
+    for (const pl of S.info[side].players) {
+      rows.push({ pl, side, s: S.pl[pl.id] || { passes: 0, done: 0, xt: 0, lb: 0, pk: 0, shots: 0, xg: 0, goals: 0, wins: 0, speed: 0 } });
+    }
+  }
+  return rows;
+}
+function renderPlayers() {
+  const rows = playerRows();
+  const col = PL_COLS[S.plSort];
+  rows.sort((a, b) => col[1](b.s) - col[1](a.s));
+  const best = rows.length ? col[1](rows[0].s) : 0;
+  $("players-table").innerHTML = `<thead><tr><th>Player</th><th>Pos</th>${PL_COLS.map((c, i) =>
+    `<th data-col="${i}" ${i === S.plSort ? 'aria-sort="descending"' : ""} tabindex="0">${c[0]}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(({ pl, side, s }) => `<tr class="${side}"><td class="name"><i></i>${pl.number} ${esc(pl.name)}</td>
+      <td>${esc(pl.position)}</td>${PL_COLS.map((c, i) =>
+        `<td class="${i === S.plSort && best > 0 && c[1](s) === best ? "top" : ""}">${c[2](s)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+  // stand-outs over both teams, whatever the filter
+  const all = [];
+  if (S.info) for (const side of ["home", "away"]) for (const pl of S.info[side].players) all.push({ pl, side, s: S.pl[pl.id] });
+  const pick = (f) => all.filter((r) => r.s).sort((a, b) => f(b.s) - f(a.s))[0];
+  const cards = [
+    ["Most threat created", (s) => s.xt, (s) => `${s.xt.toFixed(2)} xT`, "Moved the ball closest to scoring with passes and carries."],
+    ["Most line-breaking passes", (s) => s.lb, (s) => s.lb, "Passes that went past at least one line of opponents."],
+    ["Most ball wins", (s) => s.wins, (s) => s.wins, "Tackles won and interceptions."],
+    ["Best chances", (s) => s.xg, (s) => `${s.xg.toFixed(2)} xG`, "Expected goals from the player's shots."],
+  ];
+  $("standouts").innerHTML = cards.map(([what, f, show, why]) => {
+    const r = pick(f);
+    if (!r || f(r.s) <= 0) return `<div class="standout"><div class="what">${esc(what)}</div><div class="who">—</div></div>`;
+    return `<div class="standout ${r.side}"><div class="what">${esc(what)}</div>
+      <div class="who">${esc(r.pl.name)} <span class="hint">${esc(teamShort(r.side))}</span></div>
+      <div class="val">${show(r.s)}</div><div class="why">${esc(why)}</div></div>`;
+  }).join("");
+}
+$("players-table").addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-col]");
+  if (th) { S.plSort = +th.dataset.col; renderPlayers(); }
+});
+$("players-table").addEventListener("keydown", (e) => {
+  const th = e.target.closest("th[data-col]");
+  if (th && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); S.plSort = +th.dataset.col; renderPlayers(); }
+});
+document.querySelectorAll("#pl-team button").forEach((b) => b.addEventListener("click", () => {
+  S.plTeam = b.dataset.team;
+  document.querySelectorAll("#pl-team button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  renderPlayers();
+}));
+
+// ----------------------------------------------------------------------------- broadcast
+function renderBroadcast() {
+  const [ctx, W, H, dpr] = fit($("bc-pitch"));
+  // the 16:9 stage is wider than the pitch: centre the pitch and let the stage colour frame it
+  ctx.clearRect(0, 0, W, H);
+  const ph = H * 0.86, pw = ph * (105 / 68);
+  ctx.save();
+  ctx.translate((W - pw) / 2, (H - ph) / 2);
+  const [sx, sy] = pitchBase(ctx, pw, ph, dpr);
+  LAYERS.live.draw(ctx, sx, sy, dpr);
+  ctx.restore();
+  const mins = Math.floor(S.matchT / 60);
+  const bar = (side) => `<i style="background:var(--${side})"></i>${esc(teamShort(side))}`;
+  $("bc-bug").innerHTML = `<span class="t">${bar("home")}</span><span class="s">${S.score[0]}–${S.score[1]}</span>
+    <span class="t">${esc(teamShort("away"))}<i style="background:var(--away)"></i></span>
+    <span class="c">${S.ended ? "FT" : `${mins}'`}</span>`;
+  const tr = S.trust;
+  $("bc-trust").innerHTML = `Verified on air <b>${tr ? Math.round(tr.truth_score * 100) : 100}%</b>`;
+  const cue = [...S.cues].reverse().find((c) => c.t_in <= S.matchT + 1);
+  const el = $("bc-third");
+  if (!cue) { el.className = "bc-third off"; return; }
+  if (el.dataset.id !== cue.cue_id) {
+    el.dataset.id = cue.cue_id;
+    el.className = `bc-third ${cueSideClass(cue) || "none"}`;
+    el.innerHTML = `<span class="k">${esc(KINDS[cue.kind] || cue.kind)}</span>
+      <span class="m">${cue.minute}'</span>
+      <div class="b"><h3>${esc(cue.headline)}</h3><p>${esc(cue.body)} <span class="v">✓ checked</span></p></div>`;
+  }
+}
+document.querySelectorAll("#bc-bg button").forEach((b) => b.addEventListener("click", () => {
+  $("stage").classList.toggle("key", b.dataset.bg === "key");
+  document.querySelectorAll("#bc-bg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+}));
+$("bc-full").addEventListener("click", () => {
+  const st = $("stage");
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (st.requestFullscreen) st.requestFullscreen().catch(() => {});
+});
+document.addEventListener("fullscreenchange", schedule);
+
 function schedule() {
   if (drawQueued) return;
   drawQueued = true;
@@ -852,6 +972,8 @@ function schedule() {
     drawQueued = false;
     renderScoreboards();
     if ($("view-studio").classList.contains("active")) { drawPitch(); drawPulse(); }
+    if ($("view-broadcast").classList.contains("active")) renderBroadcast();
+    if ($("view-players").classList.contains("active")) renderPlayers();
   });
 }
 
@@ -860,7 +982,8 @@ document.querySelectorAll(".tab").forEach((tab) =>
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t === tab)));
     document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${tab.dataset.view}`));
-    if (tab.dataset.view === "studio") schedule();
+    if (["studio", "broadcast"].includes(tab.dataset.view)) schedule();
+    if (tab.dataset.view === "players") renderPlayers();
     if (tab.dataset.view === "trust") { renderTrust(); renderVerdicts(); }
     if (tab.dataset.view === "fan") renderFan();
   }));

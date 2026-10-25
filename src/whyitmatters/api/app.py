@@ -57,6 +57,7 @@ EVENT_FIELDS = (
     "end_y",
     "outcome",
     "xg",
+    "ball_speed_kmh",
     "score_home",
     "score_away",
 )

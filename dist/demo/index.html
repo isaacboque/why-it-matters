@@ -32,6 +32,8 @@
 
   <nav class="tabs" role="tablist">
     <button class="tab" role="tab" id="tab-studio" data-view="studio" aria-selected="true">Match centre</button>
+    <button class="tab" role="tab" id="tab-broadcast" data-view="broadcast" aria-selected="false">Broadcast</button>
+    <button class="tab" role="tab" id="tab-players" data-view="players" aria-selected="false">Players</button>
     <button class="tab" role="tab" id="tab-fan" data-view="fan" aria-selected="false">Fan</button>
     <button class="tab" role="tab" id="tab-trust" data-view="trust" aria-selected="false">Trust</button>
   </nav>
@@ -82,6 +84,39 @@
             <div class="rail" id="rail" aria-live="polite"></div>
           </div>
         </aside>
+      </div>
+    </section>
+
+    <section id="view-broadcast" class="view" role="tabpanel" aria-labelledby="tab-broadcast">
+      <div class="bc-bar">
+        <p class="hint">What a viewer at home sees: the cue the Producer put on air, as a lower third over the live picture.</p>
+        <div class="seg" id="bc-bg" aria-label="Background">
+          <button data-bg="pitch" aria-pressed="true">Over the pitch</button>
+          <button data-bg="key" aria-pressed="false">Key colour</button>
+        </div>
+        <button id="bc-full" type="button">Full screen</button>
+      </div>
+      <div class="stage" id="stage">
+        <canvas id="bc-pitch" aria-hidden="true"></canvas>
+        <div class="bc-bug" id="bc-bug"></div>
+        <div class="bc-trust" id="bc-trust"></div>
+        <div class="bc-third" id="bc-third" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="view-players" class="view" role="tabpanel" aria-labelledby="tab-players">
+      <div class="standouts" id="standouts"></div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Player numbers</h2>
+          <div class="seg" id="pl-team" aria-label="Team">
+            <button data-team="both" aria-pressed="true">Both</button>
+            <button data-team="home" aria-pressed="false">Home</button>
+            <button data-team="away" aria-pressed="false">Away</button>
+          </div>
+        </div>
+        <div class="table-wrap"><table class="players" id="players-table"></table></div>
+        <p class="hint">Tap a column to sort. xT added: how much closer to scoring the player's completed passes and carries moved the ball. Bypassed: opponents taken out of the game by the player's passes.</p>
       </div>
     </section>
 
