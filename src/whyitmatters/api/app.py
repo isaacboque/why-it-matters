@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import threading
 import time
 from collections.abc import AsyncIterator, Mapping
 from functools import lru_cache
@@ -62,6 +64,7 @@ EVENT_FIELDS = (
     "score_away",
 )
 
+log = logging.getLogger(__name__)
 LANG_PATTERN = r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$"  # a BCP-47 tag, not free text
 SeedPath = Annotated[int, ApiPath(ge=0, le=MAX_SEED, description="Match seed")]
 
@@ -71,6 +74,7 @@ class Health(BaseModel):
     status: str
     version: str
     generator: str = "template"  # which writer is on: template, or llm via <provider>
+    engine: str = "inline"  # inline, or agent_framework (Microsoft Agent Framework workflow)
 
 
 class CuesResponse(BaseModel):
@@ -79,7 +83,7 @@ class CuesResponse(BaseModel):
     match_id: str
     seed: int
     cues: list[Cue]
-    trust: dict[str, float]
+    trust: dict[str, float | str]
 
 
 class PersonalResponse(BaseModel):
@@ -236,9 +240,28 @@ def create_app(env: Mapping[str, str] | None = None, client_factory=None) -> Fas
     def load(seed: int, faults: float) -> tuple[Match, Orchestrator]:
         return run(seed, round(faults, 2))
 
+    # Pre-compute the demo matches in the background so the first viewer does not wait for a
+    # model-written match (about a minute with an LLM writer). WIM_WARM_SEEDS="7,11,23".
+    warm = [int(x) for x in (env or os.environ).get("WIM_WARM_SEEDS", "").split(",") if x.strip()]
+    if warm:
+        def _warm() -> None:
+            for seed in warm:
+                for faults in (0.0, 0.3):
+                    try:
+                        load(seed, faults)
+                    except Exception:  # noqa: BLE001  (warming is best effort)
+                        log.exception("warming seed %s failed", seed)
+
+        threading.Thread(target=_warm, name="warm-matches", daemon=True).start()
+
     @app.get("/health", response_model=Health, tags=["system"])
     def health() -> Health:
-        return Health(status="ok", version=__version__, generator=generator_status)
+        return Health(
+            status="ok",
+            version=__version__,
+            generator=generator_status,
+            engine=(env or os.environ).get("WIM_ENGINE", "inline"),
+        )
 
     @app.get("/matches/{seed}", response_model=MatchMeta, tags=["match"])
     def match_info(seed: SeedPath) -> MatchMeta:

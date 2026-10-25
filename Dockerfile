@@ -4,8 +4,10 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY web ./web
-RUN pip install --no-cache-dir ".[api,llm]"
+RUN pip install --no-cache-dir ".[api,llm,maf]"
 
-ENV WHYITMATTERS_WEB=/app/web
+ENV WHYITMATTERS_WEB=/app/web \
+    WIM_ENGINE=agent_framework \
+    WIM_WARM_SEEDS=7,11,23
 EXPOSE 8000
 CMD ["uvicorn", "whyitmatters.api:app", "--host", "0.0.0.0", "--port", "8000"]
