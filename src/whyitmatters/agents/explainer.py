@@ -13,6 +13,7 @@ from whyitmatters.agents.generator import TemplateGenerator, TextGenerator, rend
 from whyitmatters.agents.models import Claim, Draft, InsightCandidate, Verdict
 from whyitmatters.agents.tactics import damage_lane
 from whyitmatters.agents.texts_tactics import ADVICE_FOR
+from whyitmatters.agents.texts_variants import situation
 from whyitmatters.pulse import damage
 from whyitmatters.pulse import xt as xt_model
 from whyitmatters.pulse.buildup import MAX_MOVE_S, MIN_MOVE_S, analyse_buildup
@@ -76,6 +77,8 @@ class Explainer:
     def __init__(self, generator: TextGenerator | None = None, faults: FaultInjector | None = None):
         self.generator = generator or TemplateGenerator()
         self.faults = faults
+        self._uses: dict[str, int] = {}  # wordings used per template, to rotate them
+        self._variant: dict[str, str] = {}  # candidate id -> its wording (stable across retries)
 
     def run(
         self,
@@ -85,6 +88,15 @@ class Explainer:
         previous: Verdict | None = None,
     ) -> Draft:
         template, slots, claims = self._compose(state, cand)
+        if cand.id not in self._variant:
+            self._variant[cand.id] = str(self._uses.get(template, 0))
+            self._uses[template] = self._uses.get(template, 0) + 1
+        slots["variant"] = self._variant[cand.id]
+        if cand.side is not None and cand.kind != "goal":
+            mine, theirs = state.score[cand.side], state.score[_other(cand.side)]
+            sit = situation(cand.kind, mine, theirs)
+            if sit:
+                slots["situation"] = sit
         if attempt == 1 and self.faults is not None:
             claims = self.faults.corrupt(claims)
         out = render_with_source(self.generator, template, "analyst", "en", slots, claims)

@@ -146,9 +146,24 @@
     </section>
 
     <section id="view-trust" class="view" role="tabpanel" aria-labelledby="tab-trust">
+      <div class="panel">
+        <div class="panel-head"><h2>How a moment gets on air</h2><span class="hint">Live counts for this match</span></div>
+        <ol class="flow" id="flow"></ol>
+      </div>
+      <h2 class="section-title">This match</h2>
       <div class="trust-grid" id="trust-grid"></div>
-      <h2 class="section-title">Verifier log</h2>
-      <div class="verdicts" id="verdicts"></div>
+      <h2 class="section-title">Measured on matches the engine never saw</h2>
+      <div class="trust-grid" id="bench-grid"></div>
+      <div class="trust-cols">
+        <div class="panel">
+          <div class="panel-head"><h2>Claims ledger</h2><span class="hint" id="ledger-count"></span></div>
+          <div class="table-wrap ledger-wrap"><table class="ledger" id="ledger"></table></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Rejected drafts</h2></div>
+          <div class="verdicts" id="verdicts"></div>
+        </div>
+      </div>
     </section>
   </main>
 

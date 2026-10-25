@@ -20,6 +20,7 @@ from whyitmatters.agents.texts_tactics import (
     LANE_PHRASES,
     TEMPLATES,
 )
+from whyitmatters.agents.texts_variants import SITUATION_PHRASES, VARIANTS
 
 NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
 
@@ -362,6 +363,7 @@ PHRASES: dict[str, dict[str, str]] = {
     "flow_none": {"en": "", "es": "", "ca": ""},
     **BUILDUP_PHRASES,
     **LANE_PHRASES,
+    **SITUATION_PHRASES,
     "verdict_deserved": {
         "en": "A deserved win for {winner}.",
         "es": "Victoria merecida de {winner}.",
@@ -394,6 +396,13 @@ def _cause(spec: str, lang: Lang) -> str:
     return sep.join(parts[:-1]) + last + parts[-1]
 
 
+def pick_wording(template: str, style: str, lang: str, variant: str) -> tuple[str, str]:
+    """The base wording or one of its alternatives (texts_variants.py), rotating by `variant`."""
+    alts = VARIANTS.get(template, {}).get(style, {}).get(lang, [])
+    k = int(variant) % (1 + len(alts)) if variant.isdigit() else 0
+    return T[template][style][lang] if k == 0 else alts[k - 1]
+
+
 class TemplateGenerator:
     name = "template"
 
@@ -416,12 +425,14 @@ class TemplateGenerator:
         self, template: str, mode: Mode, lang: str, slots: dict[str, str], claims: list[Claim]
     ) -> tuple[str, str]:
         style = "analyst" if mode in ("analyst", "coach") else "fan"
-        headline_t, body_t = T[template][style][lang]
+        headline_t, body_t = pick_wording(template, style, lang, slots.get("variant", "0"))
+        if slots.get("situation") in PHRASES:
+            body_t = f"{body_t} {{situation}}"
         if mode == "coach" and slots.get("advice") in ADVICE:
             body_t = f"{body_t} {ADVICE[slots['advice']][lang]}"
         values = {c.key: fmt(c, lang) for c in claims}
         words = dict(slots)
-        for slot in ("flow", "verdict", "buildup", "lane"):
+        for slot in ("flow", "verdict", "buildup", "lane", "situation"):
             phrase_key = words.get(slot)
             if phrase_key in PHRASES:
                 words[slot] = PHRASES[phrase_key][lang]
