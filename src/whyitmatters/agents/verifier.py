@@ -15,6 +15,8 @@ from whyitmatters.agents.models import (
     Lang,
     Verdict,
 )
+from whyitmatters.pulse import damage
+from whyitmatters.pulse import xt as xt_model
 from whyitmatters.pulse.buildup import analyse_buildup
 from whyitmatters.pulse.metrics import MinuteCounter
 from whyitmatters.schema import EventType
@@ -82,6 +84,12 @@ class Verifier:
             return float(ev.score_away)
         if c.metric in ("carry_speed_kmh", "shot_speed_kmh"):
             return ev.ball_speed_kmh
+        if c.metric in ("pass_xt_added", "pass_packing"):
+            if not damage.is_completed_pass(ev):
+                return None
+            if c.metric == "pass_packing":
+                return float(damage.packing(ev))
+            return xt_model.added(ev.x, ev.y, ev.end_x, ev.end_y)
         if c.metric == "pass_difficulty":
             return ev.pass_difficulty
         if c.metric in ("buildup_seconds", "counter_press_in_move", "long_balls_in_move"):

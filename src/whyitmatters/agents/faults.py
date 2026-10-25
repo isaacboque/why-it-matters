@@ -19,6 +19,10 @@ PERTURB = {
     "minutes": 2,
     "index": 0.15,
     "seconds": 6,
+    "metres": 5.0,
+    "m2": 150.0,
+    "xt": 0.08,
+    "formation": 9,  # 433 -> 442: another real-looking shape
 }
 
 

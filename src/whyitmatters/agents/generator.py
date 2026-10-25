@@ -17,6 +17,7 @@ from whyitmatters.agents.texts_tactics import (
     BUILDUP_PHRASES,
     DRIVER_PHRASES,
     JOINERS,
+    LANE_PHRASES,
     TEMPLATES,
 )
 
@@ -360,6 +361,7 @@ PHRASES: dict[str, dict[str, str]] = {
     },
     "flow_none": {"en": "", "es": "", "ca": ""},
     **BUILDUP_PHRASES,
+    **LANE_PHRASES,
     "verdict_deserved": {
         "en": "A deserved win for {winner}.",
         "es": "Victoria merecida de {winner}.",
@@ -419,7 +421,7 @@ class TemplateGenerator:
             body_t = f"{body_t} {ADVICE[slots['advice']][lang]}"
         values = {c.key: fmt(c, lang) for c in claims}
         words = dict(slots)
-        for slot in ("flow", "verdict", "buildup"):
+        for slot in ("flow", "verdict", "buildup", "lane"):
             phrase_key = words.get(slot)
             if phrase_key in PHRASES:
                 words[slot] = PHRASES[phrase_key][lang]

@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
+from whyitmatters.pulse import damage
 from whyitmatters.pulse import xt as xt_model
 from whyitmatters.pulse.shape import (
     MIN_FRAMES,
@@ -116,6 +117,15 @@ class SideMinute:
     pos_out: list[float] = field(default_factory=lambda: [0.0] * 22)
     n_in: int = 0
     n_out: int = 0
+    # Damage (pulse/damage.py): passes that go past opponents, and where the ball arrives
+    line_breaks: int = 0
+    packing: int = 0
+    between_lines: int = 0
+    box_entries: int = 0
+    zone14_entries: int = 0
+    halfspace_entries: int = 0
+    best_pass_xt: float = 0.0
+    best_pass_id: str | None = None
     evidence: list[str] = field(default_factory=list)  # event ids worth citing
 
 
@@ -160,6 +170,18 @@ class TeamWindow(BaseModel):
     compactness: float | None = None
     shape_out: ShapeSummary | None = None
     shape_in: ShapeSummary | None = None
+    # damage (pulse/damage.py)
+    line_breaks: int = 0
+    packing: int = 0
+    between_lines: int = 0
+    box_entries: int = 0
+    zone14_entries: int = 0
+    halfspace_entries: int = 0
+    xt_share_left: float | None = None  # share of the team's positive xT that ended in a lane
+    xt_share_centre: float | None = None
+    xt_share_right: float | None = None
+    best_pass_xt: float = 0.0  # the window's most dangerous completed pass
+    best_pass_id: str | None = None
 
 
 class WindowMetrics(BaseModel):
@@ -222,6 +244,17 @@ class MinuteCounter:
             s.xt += added
             if added > 0:
                 s.xt_zone[xt_model.zone18(ev.end_x, ev.end_y)] += added
+            box, z14, half = damage.entries(ev)
+            s.box_entries += box
+            s.zone14_entries += z14
+            s.halfspace_entries += half
+            if ev.type == EventType.PASS:
+                if damage.lines_broken(ev):
+                    s.line_breaks += 1
+                s.packing += damage.packing(ev)
+                s.between_lines += damage.between_lines(ev)
+                if added > s.best_pass_xt:
+                    s.best_pass_xt, s.best_pass_id = added, ev.id
         if ev.type == EventType.KICK_OFF:
             self._close_chain(b, turnover=False)
             self.poss_side = ev.side
@@ -343,8 +376,16 @@ class MinuteCounter:
                     "xt",
                     "n_in",
                     "n_out",
+                    "line_breaks",
+                    "packing",
+                    "between_lines",
+                    "box_entries",
+                    "zone14_entries",
+                    "halfspace_entries",
                 ):
                     setattr(dst, f, getattr(dst, f) + getattr(src, f))
+                if src.best_pass_xt > dst.best_pass_xt:
+                    dst.best_pass_xt, dst.best_pass_id = src.best_pass_xt, src.best_pass_id
                 for f in ("pos_in", "pos_out", "xt_zone"):
                     a, b2 = getattr(dst, f), getattr(src, f)
                     for i, v in enumerate(b2):
@@ -367,7 +408,24 @@ class MinuteCounter:
         def team(me: SideMinute, opp: SideMinute) -> TeamWindow:
             poss_min = me.poss_seconds / 60.0
             out, inn = shape(me.pos_out, me.n_out), shape(me.pos_in, me.n_in)
+            lanes = [sum(me.xt_zone[i * 3 + j] for i in range(6)) for j in range(3)]
+            positive = sum(lanes)
+
+            def lane_share(j: int) -> float | None:
+                return round(lanes[j] / positive, 3) if positive > 0 else None
+
             return TeamWindow(
+                line_breaks=me.line_breaks,
+                packing=me.packing,
+                between_lines=me.between_lines,
+                box_entries=me.box_entries,
+                zone14_entries=me.zone14_entries,
+                halfspace_entries=me.halfspace_entries,
+                xt_share_left=lane_share(0),
+                xt_share_centre=lane_share(1),
+                xt_share_right=lane_share(2),
+                best_pass_xt=round(me.best_pass_xt, 3),
+                best_pass_id=me.best_pass_id,
                 xt=round(me.xt, 3),
                 xt_zone=[round(v, 3) for v in me.xt_zone],
                 formation_out=formation_code(out.formation) if out else None,
