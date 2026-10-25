@@ -200,8 +200,8 @@ class Simulator:
                     return self._shot(att, holder, x, y, pressured)
 
             # 4. Pass
-            if rng.random() < 0.06 * sa.directness and x < 60:
-                dx = rng.gauss(32, 8)
+            if rng.random() < 0.17 * sa.directness and x < 70:
+                dx = rng.gauss(36, 8)
             else:
                 dx = rng.gauss(6.5 * sa.directness, 7.5)
             if x > 88:
@@ -226,7 +226,7 @@ class Simulator:
                 pass_distance=round(dist, 1), pass_difficulty=round(difficulty, 2),
                 ball_speed_kmh=round(speed, 1),
             )
-            s.t += (0.8 + dist / (speed / 3.6) + rng.uniform(1.0, 3.4)) * sa.tempo
+            s.t += (0.8 + dist / (speed / 3.6) + rng.uniform(1.6, 4.4)) * sa.tempo
 
             if not ok:
                 if rng.random() < 0.72:
