@@ -170,3 +170,34 @@ def test_the_feed_carries_positions_and_damage_for_the_match_centre(runs):
     assert done and all({"xt", "lb", "pk"} <= p.keys() for p in done)
     pulse = next(r["data"] for r in reversed(feed) if r["type"] == "pulse")
     assert pulse["match"]["home"]["passes"] >= pulse["home"]["passes"]
+
+
+# ------------------------------------------------------------------ wording variety
+def test_alternative_wordings_use_the_same_numbers_and_no_digits():
+    import re
+
+    from whyitmatters.agents.texts_variants import SITUATION_PHRASES, VARIANTS
+
+    keys = lambda text: sorted(re.findall(r"\{#(\w+)\}", text))  # noqa: E731
+    for template, styles in VARIANTS.items():
+        for style, langs in styles.items():
+            for lang, alts in langs.items():
+                base = keys(" ".join(T[template][style][lang]))
+                for head, body in alts:
+                    assert not any(ch.isdigit() for ch in head + body), (template, lang)
+                    assert keys(head + " " + body) == base, (template, style, lang)
+    for phrases in SITUATION_PHRASES.values():
+        assert set(phrases) == {"en", "es", "ca"}
+        assert not any(ch.isdigit() for t in phrases.values() for ch in t)
+
+
+def test_wordings_rotate_and_the_score_situation_is_named(runs):
+    from whyitmatters.agents.texts_variants import situation
+
+    assert situation("press_surge", 0, 1) == "sit_chasing"
+    assert situation("press_surge", 2, 1) == "sit_ahead"
+    assert situation("danger_turnovers", 1, 0) == "sit_risk"
+    assert situation("goal", 0, 1) is None
+    _, o = runs[0]
+    shifts = [i for i in o.insights if i.kind == "state_shift"]
+    assert len({i.headline for i in shifts}) >= 3  # not the same sentence every time

@@ -23,6 +23,8 @@ Built for the Microsoft × Premier League **Inside the Game: Developer Hackathon
 | Interpret | Team shape (formation in and out of possession, line height, gaps between lines, length, width, compactness) and Expected Threat (fitted 16 × 12 grid, xT added per action, xT momentum) | done |
 | Interpret | Damage: line-breaking passes, packing (opponents bypassed), receptions between the lines, box / zone 14 / half-space entries, threat by lane, most dangerous pass | done |
 | Explain | Damage and shape insights: playing through the lines, danger down one lane, momentum swing (xT), change of shape, stretched lines, the pass that broke it open; each number a Verifier-checked claim | done |
+| Render | Match Centre (scorebug, pitch layers: live 22 players / shape / threat map / passes that hurt / shots, xT momentum, head to head), Broadcast lower-third overlay, Players table, Trust control room (pipeline counts, claims ledger, held-out benchmarks, rejected drafts) | done |
+| Explain | Varied wording (rotating alternatives per insight) and the score situation ("just what they need while they're behind"), still number-free outside verified claims | done |
 | Personalize | Analyst / fan / player-focus / coach modes, "My metric" thread, EN · ES · CA offline, re-verified | done |
 | Personalize | Optional model-written captions in any language (Azure OpenAI / Foundry or GitHub Models), guarded: numbers, names, length, retry, template fallback, cost cap | done |
 

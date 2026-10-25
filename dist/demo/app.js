@@ -149,7 +149,7 @@ const handlers = {
   pulse: (d) => { S.pulses.push(d); renderFan(); renderH2H(); schedule(); },
   transition: (d) => { S.transitions.push(d); schedule(); },
   verdict: (d) => { S.verdicts.push(d); if (S.verdicts.length > 300) S.verdicts.shift(); renderVerdicts(); },
-  cue: (d) => { S.cues.push(d); renderRail(); renderFan(); schedule(); },
+  cue: (d) => { S.cues.push(d); renderRail(); renderFan(); if ($("view-trust").classList.contains("active")) renderLedger(); schedule(); },
   trust: (d) => { S.trust = d; renderTrust(); },
   recap: (d) => { S.recap = d; },
   end: () => {
@@ -543,27 +543,57 @@ function renderTrust() {
   const pct = (v) => `${(v * 100).toFixed(v >= 0.995 || v === 0 ? 0 : 1)}%`;
   $("badge-score").textContent = pct(tr.truth_score);
   $("badge").querySelector(".dot").style.background = tr.truth_score >= 0.95 ? "var(--ok)" : tr.truth_score >= 0.85 ? "var(--away)" : "var(--bad)";
-  const ev = S.eval;
+  const drafts = S.verdicts.length, rejected = S.verdicts.filter((v) => !v.ok).length;
+  const step = (who, n, d, bad = false) => `<li><div class="who">${esc(who)}</div><div class="n ${bad ? "bad" : ""}">${esc(n)}</div><div class="d">${esc(d)}</div></li>`;
+  $("flow").innerHTML = [
+    step("Match Pulse", S.pulses.length, `minutes read · ${S.transitions.length} changes of control confirmed`),
+    step("Analyst", tr.insights, "moments worth explaining (shifts, tactics, chances, records)"),
+    step("Explainer", drafts, `drafts written, ${tr.claims_generated} numbers stated as claims`),
+    step("Verifier", rejected, `drafts rejected and rewritten · every number recomputed from the raw events`, rejected > 0),
+    step("Producer", S.cues.length, "put on air, at most 3 every 5 minutes; goals always"),
+    step("Personalizer", "4 × any", "views (fan, player, analyst, coach) in any language, re-checked"),
+  ].join("");
   $("trust-grid").innerHTML = [
     stat("Truth Score", pct(tr.truth_score), `${tr.claims_verified} of ${tr.claims_generated} generated claims matched`, tr.truth_score >= 0.95),
     stat("On-air accuracy", pct(tr.on_air_accuracy ?? 1), "audited against the final match state", true),
     stat("Claims rejected", tr.claims_rejected, "caught before air"),
     stat("Retried drafts", tr.retries, `first-draft accuracy ${pct(tr.first_draft_accuracy)}`),
-    stat("Dropped", tr.dropped, "never passed verification"),
     stat("Written by", `${tr.written_by_model ?? 0} model`,
       `${tr.written_by_fallback ?? 0} template fallback · ${tr.written_by_template ?? 0} template`),
     stat("Insight latency", `${tr.latency_ms_mean.toFixed(1)} ms`, `p95 ${tr.latency_ms_p95.toFixed(1)} ms`),
-    stat("Insights → cues", `${tr.insights} → ${tr.cues}`, "on-air budget: 3 per 5 min, goals always air"),
-    stat("Shift recall", ev ? pct(ev.recall) : "—", "vs planted ground truth", false, BENCH),
-    stat("Shift precision", ev ? pct(ev.precision) : "—", "±4 min, correct new state", false, BENCH),
-    stat("Timeline accuracy", ev ? pct(ev.timeline_accuracy) : "—", ev ? `detection lag ${ev.mean_detection_lag_min} min` : "", false, BENCH),
   ].join("");
+  const ev = S.eval;
+  $("bench-grid").innerHTML = [
+    stat("Shift recall", ev ? pct(ev.recall) : "—", "changes of control found, ±4 min", false, BENCH),
+    stat("Shift precision", ev ? pct(ev.precision) : "—", "found changes that really happened", false, BENCH),
+    stat("Timeline accuracy", ev ? pct(ev.timeline_accuracy) : "—", ev ? `detection lag ${ev.mean_detection_lag_min} min` : "", false, BENCH),
+    stat("Shape with the ball", ev && ev.formation_in_accuracy != null ? pct(ev.formation_in_accuracy) : "—", "formation read from positions", false, BENCH),
+    stat("Shape without the ball", ev && ev.formation_out_accuracy != null ? pct(ev.formation_out_accuracy) : "—", "defending shape", false, BENCH),
+    stat("Block height", ev && ev.block_accuracy != null ? pct(ev.block_accuracy) : "—", "high / mid / low block", false, BENCH),
+  ].join("");
+  renderLedger();
+}
+function renderLedger() {
+  const rows = [];
+  for (const c of [...S.cues].reverse()) {
+    for (const k of c.why.claims) {
+      if (k.claim.metric === "window_minutes") continue;
+      rows.push(`<tr><td>${c.minute}'</td><td class="what">${esc(c.headline)}</td>
+        <td>${esc(METRICS[k.claim.metric] || k.claim.metric)}${k.claim.side ? ` · ${esc(teamShort(k.claim.side))}` : ""}${k.claim.window ? ` <span class="hint">${k.claim.window[0]}–${k.claim.window[1]}'</span>` : ""}</td>
+        <td>${fmtVal(k.claim.unit, k.claim.value)}</td><td>${fmtVal(k.claim.unit, k.actual)}</td>
+        <td class="${k.ok ? "ok" : "bad"}">${k.ok ? "✓" : "✗"}</td></tr>`);
+    }
+  }
+  $("ledger-count").textContent = rows.length ? `${rows.length} numbers on air, each recomputed` : "";
+  $("ledger").innerHTML = rows.length
+    ? `<thead><tr><th>Min</th><th>On air</th><th>Number</th><th>Stated</th><th>Recomputed</th><th></th></tr></thead><tbody>${rows.slice(0, 60).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Numbers appear here as cues go on air.</td></tr></tbody>`;
 }
 function renderVerdicts() {
   const rows = S.verdicts.filter((v) => !v.ok).slice(-12).reverse();
   $("verdicts").innerHTML = rows.length
-    ? rows.map((v) => `<div class="verdict bad"><b>${esc(v.kind)}</b> draft ${v.attempt} rejected: ${esc(failureList(v))}</div>`).join("")
-    : `<div class="empty">No draft has been rejected. Tick “Unreliable model” and kick off again to watch the Verifier work.</div>`;
+    ? rows.map((v) => `<div class="verdict bad"><b>${esc(KINDS[v.kind] || v.kind)}</b>, draft ${v.attempt} rejected: ${esc(failureList(v))}</div>`).join("")
+    : `<div class="empty">No draft has been rejected. Tick “Unreliable model” and kick off again to watch the Verifier catch wrong numbers.</div>`;
 }
 
 // ----------------------------------------------------------------------------- recap
