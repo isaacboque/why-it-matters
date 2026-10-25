@@ -10,9 +10,17 @@ import json
 import sys
 
 from whyitmatters.eval import score_match, summarize
+from whyitmatters.eval.shape import ShapeScore, score_shapes
 from whyitmatters.simulator import simulate
 
-TARGETS = {"precision": 0.60, "recall": 0.75, "timeline_accuracy": 0.75}
+TARGETS = {
+    "precision": 0.60,
+    "recall": 0.75,
+    "timeline_accuracy": 0.75,
+    "formation_out_accuracy": 0.70,
+    "formation_in_accuracy": 0.85,
+    "block_accuracy": 0.65,
+}
 EVAL_SEED_OFFSET = 1000
 
 
@@ -23,8 +31,12 @@ def main() -> None:
     ap.add_argument("--json", default=None, help="Write the summary as JSON")
     args = ap.parse_args()
 
-    scores = [score_match(simulate(EVAL_SEED_OFFSET + i)) for i in range(args.seeds)]
-    summary = summarize(scores).as_dict()
+    matches = [simulate(EVAL_SEED_OFFSET + i) for i in range(args.seeds)]
+    scores = [score_match(m) for m in matches]
+    shapes = ShapeScore()
+    for m in matches:
+        shapes.add(score_shapes(m))
+    summary = summarize(scores).as_dict() | shapes.as_dict()
     for s in scores:
         print(f"  {s.match_id:<22} shifts {s.true_shifts}  detected {s.detected}  hits {s.hits}"
               f"  live acc {s.minute_accuracy:.0%}  timeline acc {s.timeline_accuracy:.0%}")

@@ -48,6 +48,15 @@ def fmt(claim: Claim, lang: Lang) -> str:
     v = claim.value
     if claim.unit == "share":
         return f"{round(v * 100)}%"
+    if claim.unit == "formation":
+        return "-".join(str(int(round(v))))  # 442.0 -> "4-4-2"
+    if claim.unit == "metres":
+        return f"{round(v)} m"
+    if claim.unit == "m2":
+        return f"{round(v)} m²"
+    if claim.unit == "xt":
+        s = f"{v:.2f}"
+        return s.replace(".", DECIMAL_SEP.get(base_lang(lang), "."))
     if claim.unit in ("xg", "index"):
         s = f"{v:.2f}"
     elif claim.unit == "rate":

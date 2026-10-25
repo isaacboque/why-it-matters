@@ -65,6 +65,17 @@ Metric = Literal[
     "buildup_seconds",  # shot event: seconds from winning the ball to the shot
     "counter_press_in_move",  # shot event: 1 if the move began with a counter-press recovery
     "long_balls_in_move",  # shot event: completed long balls in the move
+    # value and shape from freeze frames, window + side (pulse/xt.py, pulse/shape.py)
+    "xt",  # Expected Threat added by completed passes and carries
+    "line_height",  # out-of-possession back line, metres from own goal
+    "line_height_in",
+    "gap_def_mid",  # metres between the back line and the next line (out of possession)
+    "gap_mid_att",
+    "team_length",
+    "team_width",
+    "compactness",  # convex hull area of the outfield players, m^2
+    "formation_out",  # formation code, e.g. 442 for "4-4-2"
+    "formation_in",
 ]
 
 # Claim metrics read straight off a team's rolling window
@@ -86,10 +97,23 @@ TEAM_WINDOW_METRICS = frozenset(
         "central_buildup_share",
         "ppda",
         "pressures",
+        "xt",
+        "line_height",
+        "line_height_in",
+        "gap_def_mid",
+        "gap_mid_att",
+        "team_length",
+        "team_width",
+        "compactness",
+        "formation_out",
+        "formation_in",
     }
 )
 
-Unit = Literal["share", "count", "xg", "kmh", "rate", "minutes", "index", "seconds"]
+Unit = Literal[
+    "share", "count", "xg", "kmh", "rate", "minutes", "index", "seconds",
+    "metres", "m2", "formation", "xt",
+]
 
 
 class Claim(BaseModel):

@@ -19,6 +19,9 @@ dev = ["pytest>=8", "ruff>=0.5", "httpx>=0.27", "fastapi>=0.110", "uvicorn>=0.29
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+whyitmatters = ["pulse/xt_grid.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

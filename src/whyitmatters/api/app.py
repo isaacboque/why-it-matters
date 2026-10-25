@@ -34,6 +34,7 @@ from whyitmatters.agents.llm import choose_generator
 from whyitmatters.agents.models import Cue, MetricTag, Mode, PersonalCue, Recap, Viewer
 from whyitmatters.eval import score_match, summarize
 from whyitmatters.eval.__main__ import EVAL_SEED_OFFSET
+from whyitmatters.eval.shape import ShapeScore, score_shapes
 from whyitmatters.schema import Match, MatchMeta, Side
 from whyitmatters.simulator import simulate
 
@@ -91,12 +92,19 @@ class EvalResponse(BaseModel):
     minute_accuracy: float
     timeline_accuracy: float
     mean_detection_lag_min: float
+    shape_windows: int = 0
+    formation_out_accuracy: float | None = None
+    formation_in_accuracy: float | None = None
+    block_accuracy: float | None = None
 
 
 @lru_cache(maxsize=4)
 def _eval(seeds: int) -> dict[str, float]:
-    scores = [score_match(simulate(EVAL_SEED_OFFSET + i)) for i in range(seeds)]
-    return summarize(scores).as_dict()
+    matches = [simulate(EVAL_SEED_OFFSET + i) for i in range(seeds)]
+    shapes = ShapeScore()
+    for m in matches:
+        shapes.add(score_shapes(m))
+    return summarize([score_match(m) for m in matches]).as_dict() | shapes.as_dict()
 
 
 # ------------------------------------------------------------------------ stream feed
