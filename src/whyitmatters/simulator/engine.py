@@ -29,6 +29,7 @@ from whyitmatters.schema import (
     Team,
 )
 from whyitmatters.simulator.phases import Style, script_phases, style_at
+from whyitmatters.simulator.positions import add_freeze_frames
 from whyitmatters.simulator.teams import CLUBS, VENUES, make_team, nominal_xy
 from whyitmatters.simulator.xg import expected_goals
 
@@ -130,7 +131,8 @@ class Simulator:
             home=self.teams["home"],
             away=self.teams["away"],
         )
-        truth = GroundTruth(phases=self.phases, key_moments=self.key_moments)
+        shapes = add_freeze_frames(self.events, self.teams, self.phases, self.seed)
+        truth = GroundTruth(phases=self.phases, key_moments=self.key_moments, shapes=shapes)
         return Match(meta=meta, events=self.events, truth=truth)
 
     def _play_period(self, period: int, start: float, end: float, kick_off: Side) -> None:

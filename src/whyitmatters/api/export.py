@@ -41,7 +41,7 @@ EVAL_SEEDS = 20
 FOCUS_PLAYERS = 3
 LANGS: tuple[str, ...] = TEMPLATE_LANGS
 MODES: tuple[str, ...] = tuple(m for m in get_args(Mode) if m != "player_focus")
-SIZE_BUDGET = 5_000_000
+SIZE_BUDGET = 15_000_000  # Analytics v2: shape and xT in every pulse
 
 Writer = Callable[[Path, Any], None]
 

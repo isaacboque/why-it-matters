@@ -31,6 +31,15 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
+from whyitmatters.pulse import xt as xt_model
+from whyitmatters.pulse.shape import (
+    MIN_FRAMES,
+    ShapeSummary,
+    formation_code,
+    own_frame,
+    possession_side,
+    summarize,
+)
 from whyitmatters.schema import PITCH_LENGTH, PITCH_WIDTH, Event, EventType, Outcome, Side
 
 FINAL_THIRD_X = 70.0
@@ -99,6 +108,14 @@ class SideMinute:
     progressive_passes: int = 0
     long_balls: int = 0
     central_build_up_passes: int = 0
+    # Expected Threat added by completed passes and carries (pulse/xt.py)
+    xt: float = 0.0
+    xt_zone: list[float] = field(default_factory=lambda: [0.0] * xt_model.ZONES18)
+    # Positional sums from freeze frames: 11 x (sum x, sum y), in and out of possession
+    pos_in: list[float] = field(default_factory=lambda: [0.0] * 22)
+    pos_out: list[float] = field(default_factory=lambda: [0.0] * 22)
+    n_in: int = 0
+    n_out: int = 0
     evidence: list[str] = field(default_factory=list)  # event ids worth citing
 
 
@@ -129,6 +146,20 @@ class TeamWindow(BaseModel):
     progressive_passes: int = 0
     long_ball_share: float = 0.0
     central_buildup_share: float = 0.0
+    # value and shape (freeze frames): see pulse/xt.py and pulse/shape.py
+    xt: float = 0.0
+    xt_zone: list[float] = []
+    formation_out: float | None = None  # formation code, e.g. 442.0 for "4-4-2"
+    formation_in: float | None = None
+    line_height: float | None = None  # out-of-possession back line, metres from own goal
+    line_height_in: float | None = None
+    gap_def_mid: float | None = None
+    gap_mid_att: float | None = None
+    team_length: float | None = None
+    team_width: float | None = None
+    compactness: float | None = None
+    shape_out: ShapeSummary | None = None
+    shape_in: ShapeSummary | None = None
 
 
 class WindowMetrics(BaseModel):
@@ -167,6 +198,30 @@ class MinuteCounter:
         self.last_t, self.last_period = ev.t, ev.period
 
         s = b[ev.side]
+        if ev.freeze is not None:
+            holder = possession_side(ev)
+            for side in ("home", "away"):
+                frame = own_frame(ev, side)
+                if frame is None:
+                    continue
+                dst = b[side]
+                acc = dst.pos_in if side == holder else dst.pos_out
+                for i, (px, py) in enumerate(frame):
+                    acc[2 * i] += px
+                    acc[2 * i + 1] += py
+                if side == holder:
+                    dst.n_in += 1
+                else:
+                    dst.n_out += 1
+        if (
+            ev.type in (EventType.PASS, EventType.CARRY)
+            and ev.end_x is not None
+            and (ev.type == EventType.CARRY or ev.outcome == Outcome.COMPLETE)
+        ):
+            added = xt_model.added(ev.x, ev.y, ev.end_x, ev.end_y)
+            s.xt += added
+            if added > 0:
+                s.xt_zone[xt_model.zone18(ev.end_x, ev.end_y)] += added
         if ev.type == EventType.KICK_OFF:
             self._close_chain(b, turnover=False)
             self.poss_side = ev.side
@@ -285,8 +340,15 @@ class MinuteCounter:
                     "progressive_passes",
                     "long_balls",
                     "central_build_up_passes",
+                    "xt",
+                    "n_in",
+                    "n_out",
                 ):
                     setattr(dst, f, getattr(dst, f) + getattr(src, f))
+                for f in ("pos_in", "pos_out", "xt_zone"):
+                    a, b2 = getattr(dst, f), getattr(src, f)
+                    for i, v in enumerate(b2):
+                        a[i] += v
                 evidence.extend(src.evidence)
         minutes = end_minute - start + 1
         h, a = agg["home"], agg["away"]
@@ -297,9 +359,28 @@ class MinuteCounter:
             total = mine + theirs_mirrored
             return round(mine / total, 3) if total else None
 
+        def shape(sums: list[float], n: int) -> ShapeSummary | None:
+            if n < MIN_FRAMES:
+                return None
+            return summarize([(sums[2 * i] / n, sums[2 * i + 1] / n) for i in range(11)])
+
         def team(me: SideMinute, opp: SideMinute) -> TeamWindow:
             poss_min = me.poss_seconds / 60.0
+            out, inn = shape(me.pos_out, me.n_out), shape(me.pos_in, me.n_in)
             return TeamWindow(
+                xt=round(me.xt, 3),
+                xt_zone=[round(v, 3) for v in me.xt_zone],
+                formation_out=formation_code(out.formation) if out else None,
+                formation_in=formation_code(inn.formation) if inn else None,
+                line_height=out.line_height if out else None,
+                line_height_in=inn.line_height if inn else None,
+                gap_def_mid=out.gap_def_mid if out else None,
+                gap_mid_att=out.gap_mid_att if out else None,
+                team_length=out.length if out else None,
+                team_width=out.width if out else None,
+                compactness=out.compactness if out else None,
+                shape_out=out,
+                shape_in=inn,
                 passes=me.passes,
                 duels_won_def=me.duels_def,
                 duels_won_mid=me.duels_mid,

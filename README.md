@@ -19,6 +19,8 @@ Built for the Microsoft × Premier League **Inside the Game: Developer Hackathon
 | Render | FastAPI (SSE stream, overlay cue JSON), Studio / Fan / Trust views, Docker | done |
 | Interpret | Tactical engine: duels by zone, high recoveries, counter-press, dangerous losses, progressive passes, long-ball share, driver attribution, build-up of goals | done |
 | Explain | Cause → effect insights (press surge, midfield battle, dangerous turnovers, going long), hardest pass, fastest shot; every driver is a Verifier-checked claim | done |
+| Ingest | Freeze frames: positions of all 22 players at every event, with scripted in/out-of-possession shapes and block heights as ground truth | done |
+| Interpret | Team shape (formation in and out of possession, line height, gaps between lines, length, width, compactness) and Expected Threat (fitted 16 × 12 grid, xT added per action, xT momentum) | done |
 | Personalize | Analyst / fan / player-focus / coach modes, "My metric" thread, EN · ES · CA offline, re-verified | done |
 | Personalize | Optional model-written captions in any language (Azure OpenAI / Foundry or GitHub Models), guarded: numbers, names, length, retry, template fallback, cost cap | done |
 
@@ -42,6 +44,7 @@ The agent team is scored on seeds 0–19 (offline template generator):
 | Truth Score with a model that mis-states 30 % of first drafts | 0.92 raw; first-draft accuracy 0.65; every retry recovers; on-air accuracy 1.00 |
 | Cues per match | 18.2 (15–22); goals always air |
 | Insights per match | 18.6: 6.6 control/chaos shifts, 2.3 goals, 2.0 press surges, 1.4 dangerous turnovers, 0.7 going long, 0.6 midfield battles, 1.4 hardest passes, 0.8 fastest shots, plus chances, top speed, passing milestones |
+| Formation detection vs scripted shape (held-out, 1,876 windows) | out of possession 0.75, in possession 0.93; block type (high / mid / low) 0.73 |
 | Driver attribution: a pressing metric is among the top drivers of a correctly detected control shift | 72 % (46/64) on tuning seeds 0–19; 86 % (63/73) on held-out seeds 1000–1019 |
 | Latency per insight | 2.2 ms mean, 18 ms max; a whole match runs in about 0.13 s |
 
@@ -75,7 +78,7 @@ or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`.
 
 ### Static demo (no backend)
 
-`python -m whyitmatters.api.export --seeds 7 11 23 --out dist/demo` writes a self-contained folder (the UI plus pre-recorded JSON, under 5 MB, relative paths only). It is committed in `dist/demo/`: serve it from any static host (or `python -m http.server -d dist/demo`) and the UI replays the recordings with the same pacing as the live stream. It is also the fallback if the hosted deploy is down.
+`python -m whyitmatters.api.export --seeds 7 11 23 --out dist/demo` writes a self-contained folder (the UI plus pre-recorded JSON, under 15 MB, relative paths only). It is committed in `dist/demo/`: serve it from any static host (or `python -m http.server -d dist/demo`) and the UI replays the recordings with the same pacing as the live stream. It is also the fallback if the hosted deploy is down.
 
 ## License
 

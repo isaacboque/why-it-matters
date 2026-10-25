@@ -58,6 +58,16 @@ Computed per rolling window and per team, from the events the simulator already 
 
 **Viewer controls.** Modes: analyst, fan, player focus, **coach** (the analyst facts plus one rule-based sentence on what the other side could change, e.g. a high press beating short build-up → "going long would bypass it"). **My metric** (pressing, duels, possession, xG, pass quality, speed) keeps one thread; goals always show.
 
+## Shape and value (Analytics v2, part 1)
+
+**Freeze frames.** Every on-ball event carries the positions of all 22 players (`freeze.t` = the acting team, `freeze.o` = the opponents, both in the acting team's coordinates and in each team's `players` order), like StatsBomb 360 data. They are generated in a post-pass that never touches the event generator's random stream: each team plays a role per phase (dominant, dominated, balanced, chaotic) with its own in-possession shape (4-3-3 or 3-2-5), out-of-possession shape (4-4-2 or 4-5-1), back-line height (high 46 m, mid 34 m, low 22 m from goal), width and gap between lines; targets follow the ball, players move at most 8.5 m/s between frames, the acting player stands exactly at the event, plus small noise. The scripted shapes are in `truth.shapes`.
+
+**Team shape** (`pulse/shape.py`), from AVERAGE positions over the window, in and out of possession: formation by line detection (sort the 10 outfield players by depth, a new line wherever the next player is more than 7.5 m deeper, keep 3-4 lines; label = players per line), back-line height, gap between the first two and the last two lines, length, width and compactness (convex hull area). Block type from the out-of-possession line height: high ≥ 30 m, low < 20 m, mid between (set on seeds 0-39).
+
+**Expected Threat** (`pulse/xt.py`): position-based xT (Karun Singh, 2018) on a 16 × 12 grid, fitted on simulated seeds 0-199 by iterating xT(z) = P(shot|z)·mean xG(z) + P(move|z)·Σ T(z→z')·xT(z'), where T counts only successful moves. xT added = xT(end) − xT(start) for every completed pass and carry; summed per team, per window, per minute (momentum) and per 6 × 3 zone (damage map). Fitted on the simulator's football: the method is unchanged with real event data.
+
+All of these are window metrics the Verifier recomputes by replaying the raw log, freeze frames included; a formation travels in a claim as a number (442 → "4-4-2").
+
 ## Success criteria
 
 Detection is tuned on seeds 0–39 and scored on held-out seeds 1000+ (`python -m whyitmatters.eval --seeds 20 --check`, run in CI).
@@ -70,6 +80,8 @@ Detection is tuned on seeds 0–39 and scored on held-out seeds 1000+ (`python -
 | Live state accuracy (what the studio sees that minute) | reported | 0.56 |
 | Detection lag (true shift → confirmed) | reported | 5.7 min |
 | Truth Score (claims passing the Verifier) | ≥ 0.95 after retries | 1.00 with the offline generator; 0.92 raw at 30 % injected faults, with on-air accuracy 1.00 after retries (seeds 0–19) |
+| Formation detection, out / in possession (5-min windows inside a scripted phase) | ≥ 0.70 / ≥ 0.85 | 0.75 / 0.93 |
+| Block type (high / mid / low) | ≥ 0.65 | 0.73 |
 | Driver attribution (a pressing metric among the top-3 drivers of a correct control shift) | ≥ 0.70 | 0.72 on seeds 0–19 (tuning), 0.86 on held-out seeds 1000–1019 |
 | Insight latency (event → cue) | < 2 s offline, < 6 s hosted model | 2.2 ms mean, 18 ms max per insight; whole match ≈ 0.13 s |
 | Realism per match | 900–1,300 passes, 12–40 shots, 70–90 % completion | ~1,090 passes, ~22 shots, ~80 %, ~2.1 goals |

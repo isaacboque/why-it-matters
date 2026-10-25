@@ -68,6 +68,16 @@ class MatchMeta(BaseModel):
     away: Team
 
 
+class Freeze(BaseModel):
+    """Where all 22 players stand at an event, in the ACTING team's coordinates.
+
+    `t` = the acting team's players, `o` = the opponents, each in its team's `players` order.
+    """
+
+    t: list[tuple[float, float]]
+    o: list[tuple[float, float]]
+
+
 class Event(BaseModel):
     """One on-ball or defensive action."""
 
@@ -96,6 +106,8 @@ class Event(BaseModel):
     xg: float | None = None
     score_home: int = 0
     score_away: int = 0
+    # Positions of all 22 players at this event (StatsBomb-360-style freeze frame)
+    freeze: Freeze | None = None
 
 
 PhaseKind = Literal["home_control", "away_control", "chaos", "balanced"]
@@ -115,11 +127,23 @@ class KeyMoment(BaseModel):
     xg: float
 
 
+class ShapeTruth(BaseModel):
+    """The shape a team was scripted to play during a phase."""
+
+    side: Side
+    start_minute: float
+    end_minute: float
+    in_possession: str  # formation label, back to front, e.g. "3-2-5"
+    out_of_possession: str  # e.g. "4-4-2"
+    block: Literal["high", "mid", "low"]
+
+
 class GroundTruth(BaseModel):
     """Known answers the simulator planted. Never shown to the agents; evaluation only."""
 
     phases: list[Phase]
     key_moments: list[KeyMoment]
+    shapes: list[ShapeTruth] = []
 
 
 class Match(BaseModel):

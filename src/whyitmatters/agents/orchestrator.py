@@ -55,6 +55,12 @@ class Orchestrator:
         self.recap: Recap | None = None
         self.latencies_ms: list[float] = []
 
+    def _xt_minute(self, minute: int) -> dict[str, float]:
+        bucket = self.state.pulse.counter.buckets.get(minute)
+        if bucket is None:
+            return {"home": 0.0, "away": 0.0}
+        return {side: round(bucket[side].xt, 3) for side in ("home", "away")}
+
     def _emit(self, kind: str, t: float, data: Any) -> None:
         payload = data.model_dump(mode="json") if hasattr(data, "model_dump") else data
         self.bus.append({"type": kind, "t": round(t, 1), "data": payload})
@@ -151,6 +157,8 @@ class Orchestrator:
                         "home": item.window.home.model_dump(),
                         "away": item.window.away.model_dump(),
                         "turnovers_per_min": item.window.turnovers_per_min,
+                        # xT generated in this single minute: the momentum chart's bars
+                        "xt_minute": self._xt_minute(item.minute),
                     },
                 )
             elif isinstance(item, Transition):
