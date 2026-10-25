@@ -12,6 +12,8 @@ const I18N = {
     full: "Full time", moments: "Moments that decided it", recap: "Recap", close: "Close", foryou: "for you",
     verified: "verified", kickoff: "Kick-off",
     coach: "Coach view", metric: "My metric", all: "Everything",
+    st_wait: "Waiting for kick-off", st_chaos: "Broken game", st_control: "{team} in control", st_balanced: "Evenly matched",
+    first: "1st half", second: "2nd half", with_ball: "With the ball", shots: "Shots", poss: "Possession",
     m: { pressing: "Pressing", duels: "Duels", possession: "Possession", xg: "xG (chances)", pass_quality: "Pass quality", speed: "Speed", threat: "Threat (xT)", shape: "Team shape" },
   },
   es: {
@@ -20,6 +22,8 @@ const I18N = {
     full: "Final", moments: "Los momentos que decidieron", recap: "Resumen", close: "Cerrar", foryou: "para ti",
     verified: "verificado", kickoff: "Saque inicial",
     coach: "Vista de entrenador", metric: "Mi métrica", all: "Todo",
+    st_wait: "Esperando el saque", st_chaos: "Partido roto", st_control: "Manda {team}", st_balanced: "Igualado",
+    first: "1ª parte", second: "2ª parte", with_ball: "Con balón", shots: "Tiros", poss: "Posesión",
     m: { pressing: "Presión", duels: "Duelos", possession: "Posesión", xg: "xG (ocasiones)", pass_quality: "Calidad de pase", speed: "Velocidad", threat: "Amenaza (xT)", shape: "Dibujo" },
   },
   ca: {
@@ -28,6 +32,8 @@ const I18N = {
     full: "Final", moments: "Els moments que ho van decidir", recap: "Resum", close: "Tanca", foryou: "per a tu",
     verified: "verificat", kickoff: "Servei inicial",
     coach: "Vista d'entrenador", metric: "La meva mètrica", all: "Tot",
+    st_wait: "Esperant el servei", st_chaos: "Partit trencat", st_control: "Mana {team}", st_balanced: "Igualat",
+    first: "1a part", second: "2a part", with_ball: "Amb pilota", shots: "Xuts", poss: "Possessió",
     m: { pressing: "Pressió", duels: "Duels", possession: "Possessió", xg: "xG (ocasions)", pass_quality: "Qualitat de passada", speed: "Velocitat", threat: "Amenaça (xT)", shape: "Dibuix" },
   },
 };
@@ -66,10 +72,10 @@ const UNITS = {
   xt_share_right: "share", pass_xt_added: "xg", pass_packing: "count",
 };
 const KINDS = {
-  goal: "goal", state_shift: "shift", big_chance: "chance", top_speed: "speed", pass_master: "passing",
-  press_surge: "press", midfield_battle: "midfield", danger_turnovers: "danger", direct_switch: "long ball",
-  pass_difficulty: "hard pass", shot_speed: "shot speed", line_breakers: "line breaks", zone_damage: "danger zone",
-  momentum_swing: "momentum", shape_change: "shape", lines_stretched: "stretched", most_dangerous_pass: "killer pass",
+  goal: "Goal", state_shift: "Control shift", big_chance: "Big chance", top_speed: "Top speed", pass_master: "Passing",
+  press_surge: "Pressing", midfield_battle: "Midfield battle", danger_turnovers: "Dangerous losses", direct_switch: "Going long",
+  pass_difficulty: "Hardest pass", shot_speed: "Fastest shot", line_breakers: "Through the lines", zone_damage: "Danger zone",
+  momentum_swing: "Momentum", shape_change: "Change of shape", lines_stretched: "Stretched lines", most_dangerous_pass: "Killer pass",
 };
 
 const S = {};
@@ -84,6 +90,8 @@ function reset() {
   Object.assign(S, {
     seed: 7, info: null, matchT: 0, events: [], pulses: [], transitions: [], cues: [], verdicts: [],
     trust: null, eval: S.eval || null, score: [0, 0], recap: null, personal: null, ended: false,
+    shots: [], hurt: [], live: null, // every shot; the passes that added most threat; the latest frame of all 22
+    railAll: false, layer: S.layer || "live", layerTeam: S.layerTeam || "home", h2hScope: S.h2hScope || "window",
     viewer: S.viewer || { mode: "fan", lang: "en", club: "", player: "", metric: "" },
   });
 }
@@ -97,6 +105,7 @@ function fmtVal(unit, v) {
   if (unit === "share") return `${Math.round(v * 100)}%`;
   if (unit === "xg" || unit === "index") return v.toFixed(2);
   if (unit === "rate") return v.toFixed(1);
+  if (unit === "xt") return v.toFixed(2);
   if (unit === "formation") return String(Math.round(v)).split("").join("-");
   if (unit === "metres") return `${Math.round(v)} m`;
   return String(Math.round(v));
@@ -126,9 +135,16 @@ const handlers = {
     S.events.push(d);
     if (S.events.length > 80) S.events.shift();
     S.score = [d.score_home, d.score_away];
+    if (d.fz) S.live = d;
+    if (d.type === "shot") S.shots.push(d);
+    if (d.type === "pass" && d.xt >= 0.03) {
+      S.hurt.push(d);
+      S.hurt.sort((p, q) => q.xt - p.xt);
+      if (S.hurt.length > 10) S.hurt.length = 10;
+    }
     schedule();
   },
-  pulse: (d) => { S.pulses.push(d); renderFan(); schedule(); },
+  pulse: (d) => { S.pulses.push(d); renderFan(); renderH2H(); schedule(); },
   transition: (d) => { S.transitions.push(d); schedule(); },
   verdict: (d) => { S.verdicts.push(d); if (S.verdicts.length > 300) S.verdicts.shift(); renderVerdicts(); },
   cue: (d) => { S.cues.push(d); renderRail(); renderFan(); schedule(); },
@@ -209,6 +225,7 @@ async function start() {
   buildSelectors();
   renderScoreboards();
   renderRail();
+  renderH2H();
   renderFan();
   renderTrust();
   renderVerdicts();
@@ -263,24 +280,110 @@ async function refreshPersonalStatic(token) {
   } catch { /* missing file: fan view stays as is */ }
 }
 
-// ----------------------------------------------------------------------------- scoreboard
+// ----------------------------------------------------------------------------- scorebug
+function crest(side) {
+  // a generated shield with the club's initials; fictional clubs, no real marks
+  const col = side === "home" ? "var(--home)" : "var(--away)";
+  const ink = side === "home" ? "var(--on-home)" : "var(--on-away)";
+  const ini = esc((S.info ? S.info[side].short_name : side).slice(0, 3));
+  return `<svg class="crest" viewBox="0 0 46 52" aria-hidden="true">
+    <path d="M23 1 L44 7 V24 C44 37 35 46 23 51 C11 46 2 37 2 24 V7 Z" fill="var(--purple)" stroke="${col}" stroke-width="2.5"/>
+    <path d="M8 12 L23 8 L38 12 V22 H8 Z" fill="${col}"/>
+    <text x="23" y="19.5" text-anchor="middle" font-family="Saira Condensed, sans-serif" font-weight="800" font-size="10" fill="${ink}">${ini}</text>
+    <text x="23" y="38" text-anchor="middle" font-family="Saira Condensed, sans-serif" font-weight="800" font-size="13" fill="#fff">${ini.slice(0, 1)}</text>
+  </svg>`;
+}
+const lastPulse = () => S.pulses[S.pulses.length - 1];
+const formationLabel = (code) => (code ? String(Math.round(code)).split("").join("-") : null);
+function stateChip(lang) {
+  const p = lastPulse();
+  const t = I18N[lang] || I18N.en;
+  if (!p) return `<span class="chip"><i></i>${esc(t.st_wait)}</span>`;
+  if (p.state === "chaos") return `<span class="chip chaos"><i></i>${esc(t.st_chaos)}</span>`;
+  if (p.state === "home_control" || p.state === "away_control") {
+    const side = p.state === "home_control" ? "home" : "away";
+    return `<span class="chip ${side}"><i></i>${esc(t.st_control.replace("{team}", teamShort(side)))}</span>`;
+  }
+  return `<span class="chip"><i></i>${esc(t.st_balanced)}</span>`;
+}
 function scoreboardHtml(lang) {
   const t = I18N[lang] || I18N.en;
-  const clk = S.ended ? t.full : S.matchT ? `${Math.floor(S.matchT / 60)}'` : t.kickoff;
+  const mins = Math.floor(S.matchT / 60);
+  const clk = S.ended ? t.full : S.matchT ? `<span class="live">●</span> ${mins}'${mins >= 45 ? ` · ${t.second}` : ` · ${t.first}`}` : t.kickoff;
+  const p = lastPulse();
+  const m = p && p.match;
+  const shape = (side) => {
+    const f = p && formationLabel(p[side].formation_in); // the last 5 minutes: a match average blurs changes
+    return f ? `${t.with_ball} ${f}` : esc(S.info ? S.info[side].formation : "");
+  };
+  const nm = (side) => `<div class="sb-name"><b><span class="full">${esc(teamName(side))}</span><span class="short">${esc(teamShort(side))}</span></b><small>${shape(side)}</small></div>`;
+  const foot = m
+    ? `<span>xG <b>${m.home.xg.toFixed(2)}</b> – <b>${m.away.xg.toFixed(2)}</b></span>
+       <span>${esc(t.shots)} <b>${m.home.shots}</b> – <b>${m.away.shots}</b></span>
+       <span>${esc(t.poss)} <b>${Math.round(m.home.possession_share * 100)}%</b> – <b>${Math.round(m.away.possession_share * 100)}%</b></span>`
+    : "";
   const btn = S.ended && S.recap ? `<button data-recap>${esc(t.recap)}</button>` : "";
-  const nm = (side) => `<span class="full">${esc(teamName(side))}</span><span class="short">${esc(teamShort(side))}</span>`;
-  return `<span class="team"><span class="swatch home"></span>${nm("home")}</span>
-    <span class="score">${S.score[0]} – ${S.score[1]}</span>
-    <span class="team">${nm("away")}<span class="swatch away"></span></span>
-    <span class="clock">${esc(clk)}</span>${btn}`;
+  return `<div class="sb-team home">${crest("home")}${nm("home")}</div>
+    <div class="sb-center"><div class="sb-score"><span>${S.score[0]}</span><span class="dash">–</span><span>${S.score[1]}</span></div>
+      <div class="sb-clock">${clk}</div></div>
+    <div class="sb-team away">${crest("away")}${nm("away")}</div>
+    <div class="sb-foot">${stateChip(lang)}${foot}${btn}</div>`;
 }
 function renderScoreboards() {
   $("scoreboard-studio").innerHTML = scoreboardHtml("en");
-  $("scoreboard-fan").innerHTML = scoreboardHtml(S.viewer.lang);
+  $("scoreboard-fan").innerHTML = scoreboardHtml(baseLang(S.viewer.lang));
 }
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-recap]")) showRecap();
 });
+
+// ----------------------------------------------------------------------------- head to head
+// [label, key, unit, plain-words explanation, lower is better]
+const H2H = [
+  ["Possession", "possession_share", "share", "Share of the time each team had the ball."],
+  ["xG", "xg", "xg", "Expected goals: how many goals the chances were worth, from where each shot was taken."],
+  ["Expected threat (xT)", "xt", "xg", "How much closer to scoring each team moved the ball with passes and carries."],
+  ["Shots", "shots", "count", "Shots on, off and blocked."],
+  ["Line-breaking passes", "line_breaks", "count", "Completed passes that went past at least one line of opponents."],
+  ["Received between the lines", "between_lines", "count", "Passes received in the space between the opponent's defence and midfield."],
+  ["Box entries", "box_entries", "count", "Passes and carries that reached the penalty area."],
+  ["Progressive passes", "progressive_passes", "count", "Completed passes that moved the ball at least 10 m towards goal."],
+  ["High recoveries", "high_recoveries", "count", "Times the ball was won back in the opponent's half."],
+  ["Passes allowed per defensive action", "ppda", "rate", "PPDA: how many passes a team lets the opponent make before it challenges. Lower means a harder press.", true],
+  ["Midfield duels won", "duel_share_mid", "share", "Share of the tackles and interceptions in midfield each team won."],
+  ["Shape with the ball", "formation_in", "formation", "How the team lines up when it has the ball, read from player positions."],
+  ["Shape without the ball", "formation_out", "formation", "How the team lines up when defending."],
+  ["Back-line height", "line_height", "metres", "How far from its own goal the defence stands without the ball."],
+];
+function renderH2H() {
+  const el = $("h2h");
+  const p = lastPulse();
+  if (!p) { el.innerHTML = `<div class="empty">${esc(T().empty)}</div>`; return; }
+  const src = S.h2hScope === "match" ? p.match : p;
+  const h = src.home, a = src.away;
+  el.innerHTML = `<div class="h2h-head"><span>${esc(teamShort("home"))}</span><span></span><span>${esc(teamShort("away"))}</span></div>` +
+    H2H.map(([label, key, unit, why, lowerBetter]) => {
+      const hv = h[key], av = a[key];
+      if (unit === "formation" || unit === "metres") {
+        const f = (v) => (v == null ? "—" : unit === "formation" ? formationLabel(v) : `${Math.round(v)} m`);
+        return `<div class="row text" title="${esc(why)}"><span class="v">${f(hv)}</span><span class="mid">${esc(label)}</span><span class="v r">${f(av)}</span></div>`;
+      }
+      const x = hv ?? 0, y = av ?? 0;
+      let hs = x + y > 0 ? x / (x + y) : 0.5;
+      if (lowerBetter && x > 0 && y > 0) hs = (1 / x) / (1 / x + 1 / y);
+      const lead = hs > 0.5 ? "h" : hs < 0.5 ? "a" : "";
+      return `<div class="row" title="${esc(why)}">
+        <span class="lab">${esc(label)}</span>
+        <span class="v ${lead === "a" ? "trail" : "lead"}">${fmtVal(unit, hv)}</span>
+        <span class="bars"><span class="h" style="flex:${hs.toFixed(3)}"></span><span class="a" style="flex:${(1 - hs).toFixed(3)}"></span></span>
+        <span class="v r ${lead === "h" ? "trail" : "lead"}">${fmtVal(unit, av)}</span></div>`;
+    }).join("");
+}
+document.querySelectorAll("#h2h-scope button").forEach((b) => b.addEventListener("click", () => {
+  S.h2hScope = b.dataset.scope;
+  document.querySelectorAll("#h2h-scope button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  renderH2H();
+}));
 
 // ----------------------------------------------------------------------------- cue rail
 function cueSideClass(c) {
@@ -290,18 +393,21 @@ function cueSideClass(c) {
 function renderRail() {
   const el = $("rail");
   if (!S.cues.length) { el.innerHTML = `<div class="empty">${esc(T().empty)}</div>`; return; }
-  el.innerHTML = [...S.cues].reverse().map((c) => `
+  const all = [...S.cues].reverse();
+  const shown = S.railAll ? all : all.slice(0, 6);
+  const more = all.length > shown.length ? `<button class="more" data-more>Show all ${all.length} moments</button>` : "";
+  el.innerHTML = shown.map((c) => `
     <article class="cue ${cueSideClass(c)} ${c.kind === "goal" ? "goal" : ""}">
       <div class="meta"><span class="min">${c.minute}'</span>
-        <span class="tag">${esc(KINDS[c.kind] || c.kind)}</span>
-        <span class="tag ${c.why.verified ? "ok" : "bad"}">${c.why.verified ? "verified" : "unverified"}</span>
-        <span class="tag">P${c.priority}</span>
-        ${c.why.attempts > 1 ? `<span class="tag bad">${c.why.attempts} drafts</span>` : ""}</div>
+        <span class="kind">${esc(KINDS[c.kind] || c.kind)}</span>
+        <span class="${c.why.verified ? "ok" : "bad"}">${c.why.verified ? "✓ verified" : "unverified"}</span>
+        ${c.why.attempts > 1 ? `<span class="bad">${c.why.attempts} drafts</span>` : ""}</div>
       <h3>${esc(c.headline)}</h3><p>${esc(c.body)}</p>
-      <button data-why="${esc(c.cue_id)}">Why?</button>
-    </article>`).join("");
+      <button data-why="${esc(c.cue_id)}">Show the proof</button>
+    </article>`).join("") + more;
 }
 $("rail").addEventListener("click", (e) => {
+  if (e.target.closest("[data-more]")) { S.railAll = true; renderRail(); return; }
   const b = e.target.closest("[data-why]");
   if (b) openWhy(b.dataset.why);
 });
@@ -415,7 +521,7 @@ function renderFan() {
   const cues = p ? p.cues.filter((c) => S.ended || c.t_in <= S.matchT) : [];
   if (!cues.length) { el.innerHTML = `<div class="empty">${esc(t.empty)}</div>`; return; }
   el.innerHTML = [...cues].reverse().map((c) => `
-    <article class="cue ${c.kind === "goal" ? "goal" : ""} ${c.for_you ? "you" : ""}">
+    <article class="cue ${c.side || ""} ${c.kind === "goal" ? "goal" : ""} ${c.for_you ? "you" : ""}">
       <div class="meta"><span class="min">${c.minute}'</span>
         ${c.for_you ? `<span class="tag ok">${esc(t.foryou)}</span>` : ""}
         <span class="tag">${esc(t.verified)}</span>
@@ -483,105 +589,260 @@ function fit(canvas) {
 }
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-function drawPitch() {
-  const [ctx, W, H, dpr] = fit($("pitch"));
-  ctx.clearRect(0, 0, W, H);
+// The pitch: one shared picture, the home team attacks left to right.
+function pitchBase(ctx, W, H, dpr) {
   const sx = W / 105, sy = H / 68;
-  // faint territory tint per third from the latest window: home attacks right, away attacks left
-  const last = S.pulses[S.pulses.length - 1];
-  if (last) {
-    const tint = (x0, x1, color, a) => {
-      if (a <= 0) return;
-      ctx.globalAlpha = Math.min(0.4, a); ctx.fillStyle = color; ctx.fillRect(x0 * sx, 0, (x1 - x0) * sx, H);
-    };
-    const tiltEdge = (last.home.field_tilt - 0.5) * 1.2;      // > 0: home pins away in their third
-    const possEdge = (last.home.possession_share - 0.5) * 0.8; // > 0: home owns the middle
-    tint(70, 105, css("--home"), tiltEdge);
-    tint(0, 35, css("--away"), -tiltEdge);
-    tint(35, 70, possEdge >= 0 ? css("--home") : css("--away"), Math.abs(possEdge));
-    ctx.globalAlpha = 1;
-  }
-  ctx.strokeStyle = css("--pitch-line"); ctx.lineWidth = 1.5 * dpr;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = css("--pitch-stripe");
+  for (let i = 0; i < 12; i += 2) ctx.fillRect((i * 105 / 12) * sx, 0, (105 / 12) * sx, H);
+  ctx.strokeStyle = css("--pitch-line"); ctx.lineWidth = 1.3 * dpr;
   const rect = (x, y, w, h) => ctx.strokeRect(x * sx, y * sy, w * sx, h * sy);
   rect(0.5, 0.5, 104, 67);
   ctx.beginPath(); ctx.moveTo(52.5 * sx, 0); ctx.lineTo(52.5 * sx, H); ctx.stroke();
   ctx.beginPath(); ctx.ellipse(52.5 * sx, 34 * sy, 9.15 * sx, 9.15 * sy, 0, 0, 7); ctx.stroke();
   rect(0.5, 13.85, 16.5, 40.3); rect(88.5, 13.85, 16, 40.3);
   rect(0.5, 24.85, 5.5, 18.3); rect(99, 24.85, 5.5, 18.3);
+  ctx.fillStyle = css("--pitch-line");
+  for (const x of [11, 94]) { ctx.beginPath(); ctx.arc(x * sx, 34 * sy, 1.8 * dpr, 0, 7); ctx.fill(); }
+  return [sx, sy];
+}
+// an event's own coordinates -> the shared picture
+const abs = (side, x, y) => (side === "away" ? [105 - x, 68 - y] : [x, y]);
+const teamCol = (side) => css(side === "home" ? "--home" : "--away");
+const playerById = (id) => {
+  if (!S.info || !id) return null;
+  for (const s of ["home", "away"]) { const p = S.info[s].players.find((q) => q.id === id); if (p) return p; }
+  return null;
+};
+const surname = (id) => { const p = playerById(id); return p ? p.name.split(" ").slice(-1)[0] : ""; };
 
-  const home = css("--home"), away = css("--away");
-  const at = (ev, x, y) => (ev.side === "away" ? [(105 - x) * sx, (68 - y) * sy] : [x * sx, y * sy]);
-  const recent = S.events.filter((e) => !["kick_off", "half_end"].includes(e.type)).slice(-25);
-  recent.forEach((ev, i) => {
-    const a = (i + 1) / recent.length;
-    const col = ev.side === "home" ? home : away;
-    ctx.globalAlpha = 0.2 + 0.8 * a; ctx.fillStyle = col; ctx.strokeStyle = col;
-    const [x, y] = at(ev, ev.x, ev.y);
-    if (ev.end_x != null && (ev.type === "pass" || ev.type === "carry")) {
-      const [x2, y2] = at(ev, ev.end_x, ev.end_y);
-      ctx.lineWidth = (ev.type === "pass" ? 2 : 3) * dpr;
-      ctx.setLineDash(ev.type === "carry" ? [6 * dpr, 4 * dpr] : []);
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]);
-    }
-    const r = (ev.type === "shot" ? 7 : 4) * dpr;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-    if (ev.outcome === "goal") {
-      ctx.lineWidth = 3 * dpr; ctx.strokeStyle = "#fff";
-      ctx.beginPath(); ctx.arc(x, y, r + 5 * dpr, 0, 7); ctx.stroke();
-    }
-    if (ev.outcome === "incomplete" || ev.outcome === "lost") {
-      ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5 * dpr;
-      ctx.beginPath(); ctx.moveTo(x - 3 * dpr, y - 3 * dpr); ctx.lineTo(x + 3 * dpr, y + 3 * dpr); ctx.stroke();
-    }
-  });
-  ctx.globalAlpha = 1;
-  $("pitch-legend").innerHTML = `<span><span class="swatch home"></span> ${esc(teamName("home"))} attacks →</span>
-    <span><span class="swatch away"></span> ← ${esc(teamName("away"))} attacks</span><span>line = pass · dashed = carry · ring = goal</span>`;
+function arrow(ctx, x1, y1, x2, y2, head) {
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - head * Math.cos(a - 0.45), y2 - head * Math.sin(a - 0.45));
+  ctx.lineTo(x2 - head * Math.cos(a + 0.45), y2 - head * Math.sin(a + 0.45));
+  ctx.closePath(); ctx.fill();
+}
+function dot(ctx, x, y, r, fill, stroke, lw) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
 }
 
+const LAYERS = {
+  live: {
+    caption: () => "Where all 22 players stand at the latest action, and the last few moves of the ball. Numbers are shirt numbers.",
+    legend: () => `<span><span class="swatch home"></span>${esc(teamName("home"))} attacks →</span><span><span class="swatch away"></span>← ${esc(teamName("away"))} attacks</span><span>white = the ball</span>`,
+    draw(ctx, sx, sy, dpr) {
+      const trail = S.events.filter((e) => !["kick_off", "half_end", "pressure"].includes(e.type)).slice(-7);
+      trail.forEach((ev, i) => {
+        if (ev.end_x == null || !["pass", "carry"].includes(ev.type)) return;
+        const [x1, y1] = abs(ev.side, ev.x, ev.y), [x2, y2] = abs(ev.side, ev.end_x, ev.end_y);
+        ctx.globalAlpha = 0.25 + (0.6 * (i + 1)) / trail.length;
+        ctx.strokeStyle = teamCol(ev.side); ctx.fillStyle = teamCol(ev.side); ctx.lineWidth = 2 * dpr;
+        ctx.setLineDash(ev.type === "carry" ? [5 * dpr, 4 * dpr] : []);
+        arrow(ctx, x1 * sx, y1 * sy, x2 * sx, y2 * sy, 7 * dpr);
+        ctx.setLineDash([]);
+      });
+      ctx.globalAlpha = 1;
+      const ev = S.live;
+      if (!ev) return;
+      const r = Math.max(8 * dpr, sx * 1.15);
+      ctx.font = `700 ${Math.round(r * 1.15)}px "Saira Condensed", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (const [side, off] of [["home", 0], ["away", 22]]) {
+        const players = S.info ? S.info[side].players : [];
+        for (let i = 0; i < 11; i++) {
+          const x = ev.fz[off + 2 * i] * sx, y = ev.fz[off + 2 * i + 1] * sy;
+          dot(ctx, x, y, r, teamCol(side), css("--pitch"), 1.5 * dpr);
+          ctx.fillStyle = side === "home" ? css("--on-home") : css("--on-away");
+          ctx.fillText(players[i] ? players[i].number : "", x, y + 0.5 * dpr);
+        }
+      }
+      const [bx, by] = abs(ev.side, ev.end_x ?? ev.x, ev.end_y ?? ev.y);
+      dot(ctx, bx * sx, by * sy, 4.5 * dpr, "#fff", "#000", 1.2 * dpr);
+    },
+  },
+  shape: {
+    team: true,
+    caption: () => {
+      const tw = lastPulse() && lastPulse()[S.layerTeam];
+      if (!tw || !tw.shape_in) return "Average positions appear after a few minutes of play.";
+      const out = tw.shape_out;
+      return `${teamName(S.layerTeam)}, last 5 minutes. With the ball (solid) they line up ${tw.shape_in.formation}; without it (hollow) ${out ? out.formation : "—"}, with the back line ${out ? Math.round(out.line_height) : "—"} m from their goal and ${out ? Math.round(out.gap_def_mid) : "—"} m between defence and midfield.`;
+    },
+    legend: () => `<span>● with the ball</span><span>○ without the ball</span><span>lines join players read as one line</span>`,
+    draw(ctx, sx, sy, dpr) {
+      const tw = lastPulse() && lastPulse()[S.layerTeam];
+      if (!tw) return;
+      const side = S.layerTeam, col = teamCol(side);
+      const drawShape = (shape, solid) => {
+        if (!shape) return;
+        const pts = shape.avg.map(([x, y]) => abs(side, x, y));
+        const out = pts.slice(1).map((p, i) => ({ p, i: i + 1, own: shape.avg[i + 1][0] }));
+        out.sort((a, b) => a.own - b.own);
+        let k = 0;
+        ctx.strokeStyle = col; ctx.lineWidth = (solid ? 2 : 1.5) * dpr; ctx.globalAlpha = solid ? 0.9 : 0.6;
+        ctx.setLineDash(solid ? [] : [4 * dpr, 4 * dpr]);
+        for (const n of shape.formation.split("-").map(Number)) {
+          const line = out.slice(k, k + n).sort((a, b) => a.p[1] - b.p[1]); k += n;
+          ctx.beginPath(); line.forEach(({ p }, j) => (j ? ctx.lineTo(p[0] * sx, p[1] * sy) : ctx.moveTo(p[0] * sx, p[1] * sy))); ctx.stroke();
+        }
+        ctx.setLineDash([]); ctx.globalAlpha = 1;
+        pts.forEach(([x, y], i) => dot(ctx, x * sx, y * sy, Math.max(6 * dpr, sx * (i ? 1 : 0.85)), solid ? col : css("--pitch"), col, 2 * dpr));
+      };
+      drawShape(tw.shape_out, false);
+      drawShape(tw.shape_in, true);
+    },
+  },
+  threat: {
+    team: true,
+    caption: () => {
+      const m = lastPulse() && lastPulse().match[S.layerTeam];
+      if (!m) return "The threat map fills in as the game goes on.";
+      const lanes = [["down the left", m.xt_share_left], ["through the middle", m.xt_share_centre], ["down the right", m.xt_share_right]];
+      const [lane, share] = lanes.sort((a, b) => (b[1] || 0) - (a[1] || 0))[0];
+      return `Where ${teamName(S.layerTeam)}'s passes and carries took the ball closer to scoring this match (expected threat, xT). Brighter = more danger. ${share ? `${Math.round(share * 100)}% of it came ${lane}.` : ""}`;
+    },
+    legend: () => `<span>each block = one sixth of the length × one third of the width</span><span>number = xT added there</span>`,
+    draw(ctx, sx, sy, dpr) {
+      const m = lastPulse() && lastPulse().match[S.layerTeam];
+      if (!m) return;
+      const zones = m.xt_zone, max = Math.max(...zones, 0.001), side = S.layerTeam;
+      ctx.font = `700 ${12 * dpr}px "Saira Condensed", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      zones.forEach((v, idx) => {
+        const i = Math.floor(idx / 3), j = idx % 3;
+        let [x0, y0] = abs(side, i * 17.5, j * (68 / 3));
+        if (side === "away") { x0 -= 17.5; y0 -= 68 / 3; }
+        ctx.globalAlpha = 0.08 + 0.72 * (v / max);
+        ctx.fillStyle = teamCol(side);
+        ctx.fillRect(x0 * sx + dpr, y0 * sy + dpr, 17.5 * sx - 2 * dpr, (68 / 3) * sy - 2 * dpr);
+        ctx.globalAlpha = 1;
+        if (v >= 0.05 * max && v > 0.005) {
+          ctx.fillStyle = v / max > 0.55 ? (side === "home" ? css("--on-home") : "#fff") : "#fff";
+          ctx.fillText(v.toFixed(2), (x0 + 8.75) * sx, (y0 + 34 / 3) * sy);
+        }
+      });
+    },
+  },
+  passes: {
+    caption: () => S.hurt.length
+      ? `The ${S.hurt.length} completed passes that added the most expected threat so far. Thicker = more dangerous. A ring at the start means the pass went past at least one line of opponents.`
+      : "The most dangerous passes appear here as the game goes on.",
+    legend: () => `<span><span class="swatch home"></span>${esc(teamShort("home"))}</span><span><span class="swatch away"></span>${esc(teamShort("away"))}</span><span>labels: passer and xT added</span>`,
+    draw(ctx, sx, sy, dpr) {
+      const top = S.hurt;
+      const max = top.length ? top[0].xt : 1;
+      ctx.font = `600 ${11 * dpr}px "IBM Plex Sans", sans-serif`; ctx.textBaseline = "bottom";
+      [...top].reverse().forEach((ev) => {
+        const [x1, y1] = abs(ev.side, ev.x, ev.y), [x2, y2] = abs(ev.side, ev.end_x, ev.end_y);
+        const col = teamCol(ev.side);
+        ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = (1.5 + 3.5 * (ev.xt / max)) * dpr;
+        ctx.globalAlpha = 0.5 + 0.5 * (ev.xt / max);
+        arrow(ctx, x1 * sx, y1 * sy, x2 * sx, y2 * sy, 9 * dpr);
+        if (ev.lb) dot(ctx, x1 * sx, y1 * sy, 5 * dpr, null, col, 2 * dpr);
+      });
+      ctx.globalAlpha = 1;
+      top.slice(0, 4).forEach((ev) => {
+        const [x2, y2] = abs(ev.side, ev.end_x, ev.end_y);
+        ctx.fillStyle = "#fff"; ctx.textAlign = x2 > 80 ? "right" : "left";
+        ctx.fillText(`${surname(ev.player_id)} +${ev.xt.toFixed(2)}`, x2 * sx + (x2 > 80 ? -8 : 8) * dpr, y2 * sy - 6 * dpr);
+      });
+    },
+  },
+  shots: {
+    caption: () => {
+      const g = S.shots.filter((s) => s.outcome === "goal").length;
+      return S.shots.length
+        ? `All ${S.shots.length} shots so far. The bigger the circle, the better the chance (xG). Filled circles were on target; rings mark the ${g} goal${g === 1 ? "" : "s"}.`
+        : "No shots yet.";
+    },
+    legend: () => `<span><span class="swatch home"></span>${esc(teamShort("home"))} shoots →</span><span><span class="swatch away"></span>← ${esc(teamShort("away"))} shoots</span>`,
+    draw(ctx, sx, sy, dpr) {
+      for (const ev of S.shots) {
+        const [x, y] = abs(ev.side, ev.x, ev.y);
+        const r = (4 + 22 * Math.sqrt(ev.xg || 0.01)) * dpr, col = teamCol(ev.side);
+        const onTarget = ev.outcome === "goal" || ev.outcome === "saved";
+        ctx.globalAlpha = onTarget ? 0.85 : 0.5;
+        dot(ctx, x * sx, y * sy, r, onTarget ? col : null, col, 2 * dpr);
+        ctx.globalAlpha = 1;
+        if (ev.outcome === "goal") dot(ctx, x * sx, y * sy, r + 4 * dpr, null, "#fff", 2.5 * dpr);
+      }
+    },
+  },
+};
+function drawPitch() {
+  const [ctx, W, H, dpr] = fit($("pitch"));
+  const [sx, sy] = pitchBase(ctx, W, H, dpr);
+  const layer = LAYERS[S.layer];
+  layer.draw(ctx, sx, sy, dpr);
+  $("layer-team").hidden = !layer.team;
+  $("layer-team").querySelectorAll("button").forEach((b) => {
+    b.textContent = teamShort(b.dataset.team);
+    b.setAttribute("aria-pressed", String(b.dataset.team === S.layerTeam));
+  });
+  $("pitch-caption").textContent = layer.caption();
+  $("pitch-legend").innerHTML = layer.legend();
+}
+document.querySelectorAll("#layers button").forEach((b) => b.addEventListener("click", () => {
+  S.layer = b.dataset.layer;
+  document.querySelectorAll("#layers button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  schedule();
+}));
+document.querySelectorAll("#layer-team button").forEach((b) => b.addEventListener("click", () => {
+  S.layerTeam = b.dataset.team;
+  schedule();
+}));
+
+// Momentum: xT created per minute (home up, away down), who controls the game, goals and shifts.
 function drawPulse() {
   const [ctx, W, H, dpr] = fit($("pulse"));
   ctx.clearRect(0, 0, W, H);
-  const mid = H / 2;
+  const top = 8 * dpr, bottom = H - 18 * dpr, mid = (top + bottom) / 2, half = (bottom - top) / 2;
   const maxMin = Math.max(90, ...S.pulses.map((p) => p.minute + 1));
   const X = (m) => (m / maxMin) * W;
-  ctx.strokeStyle = css("--line"); ctx.lineWidth = dpr;
-  ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
-  for (let m = 15; m < maxMin; m += 15) { ctx.beginPath(); ctx.moveTo(X(m), 0); ctx.lineTo(X(m), H); ctx.stroke(); }
-  ctx.fillStyle = css("--muted"); ctx.font = `${11 * dpr}px system-ui`;
-  for (let m = 0; m <= maxMin; m += 15) ctx.fillText(`${m}'`, Math.min(X(m) + 3 * dpr, W - 22 * dpr), H - 4 * dpr);
-
-  const pts = S.pulses.map((p) => [X(p.minute + 1), mid - p.dominance * mid * 0.9]);
-  if (pts.length) {
-    const area = (clipTop, color) => {
-      ctx.save(); ctx.beginPath(); ctx.rect(0, clipTop ? 0 : mid, W, clipTop ? mid : H - mid); ctx.clip();
-      ctx.beginPath(); ctx.moveTo(pts[0][0], mid);
-      pts.forEach(([x, y]) => ctx.lineTo(x, y)); ctx.lineTo(pts[pts.length - 1][0], mid); ctx.closePath();
-      ctx.globalAlpha = 0.45; ctx.fillStyle = color; ctx.fill(); ctx.restore();
-    };
-    area(true, css("--home")); area(false, css("--away"));
-    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 1.5 * dpr; ctx.stroke();
-    const chaosPath = () => {
-      ctx.beginPath();
-      S.pulses.forEach((p, i) => { const x = X(p.minute + 1), y = H - 14 * dpr - p.chaos * (H - 30 * dpr); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-    };
-    chaosPath(); ctx.strokeStyle = css("--primary"); ctx.lineWidth = 4.5 * dpr; ctx.stroke(); // dark casing: cyan alone is faint on light
-    chaosPath(); ctx.strokeStyle = css("--chaos"); ctx.lineWidth = 2.5 * dpr; ctx.stroke();
+  // backdrop: who controls the game, a faint band per minute
+  for (const p of S.pulses) {
+    const col = p.state === "home_control" ? css("--home") : p.state === "away_control" ? css("--away") : p.state === "chaos" ? css("--chaos") : null;
+    if (!col) continue;
+    ctx.globalAlpha = 0.09; ctx.fillStyle = col; ctx.fillRect(X(p.minute), top, X(1) + 0.5, bottom - top);
   }
-  ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.strokeStyle = css("--muted"); ctx.lineWidth = dpr;
-  for (const t of S.transitions) { const x = X(t.estimated_minute); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H - 14 * dpr); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = css("--line-strong"); ctx.lineWidth = dpr;
+  ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+  ctx.strokeStyle = css("--line");
+  for (let m = 15; m < maxMin; m += 15) { ctx.beginPath(); ctx.moveTo(X(m), top); ctx.lineTo(X(m), bottom); ctx.stroke(); }
+  ctx.fillStyle = css("--muted"); ctx.font = `${11 * dpr}px "IBM Plex Sans", sans-serif`; ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+  for (let m = 0; m <= maxMin; m += 15) ctx.fillText(m === 45 ? "HT" : `${m}'`, Math.min(X(m) + 3 * dpr, W - 22 * dpr), H - 4 * dpr);
+  // bars
+  const maxXt = Math.max(0.08, ...S.pulses.map((p) => Math.max(p.xt_minute.home, p.xt_minute.away)));
+  const bw = Math.max(1, X(1) - 2 * dpr);
+  for (const p of S.pulses) {
+    const hh = (Math.max(0, p.xt_minute.home) / maxXt) * half * 0.95;
+    const ah = (Math.max(0, p.xt_minute.away) / maxXt) * half * 0.95;
+    ctx.fillStyle = css("--home"); ctx.fillRect(X(p.minute) + dpr, mid - hh, bw, hh);
+    ctx.fillStyle = css("--away"); ctx.fillRect(X(p.minute) + dpr, mid, bw, ah);
+  }
+  // 5-minute balance line
+  const pts = S.pulses.map((p) => [X(p.minute + 1), mid - ((p.xt_minute ? p.home.xt - p.away.xt : 0) / (maxXt * 3)) * half]);
+  if (pts.length > 1) {
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, Math.max(top, Math.min(bottom, y))) : ctx.moveTo(x, y)));
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 1.6 * dpr; ctx.stroke();
+  }
+  ctx.setLineDash([3 * dpr, 4 * dpr]); ctx.strokeStyle = css("--muted"); ctx.lineWidth = dpr;
+  for (const t of S.transitions) { const x = X(t.estimated_minute); ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke(); }
   ctx.setLineDash([]);
   for (const c of S.cues.filter((q) => q.kind === "goal")) {
-    ctx.fillStyle = c.side === "home" ? css("--home") : css("--away");
-    ctx.beginPath(); ctx.arc(X(c.minute), mid, 6 * dpr, 0, 7); ctx.fill();
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2 * dpr; ctx.stroke();
+    const y = c.side === "home" ? top + 7 * dpr : bottom - 7 * dpr;
+    dot(ctx, X(c.minute + 0.5), y, 6 * dpr, teamCol(c.side), css("--panel"), 2 * dpr);
   }
-  const nowX = X(S.matchT / 60);
-  ctx.strokeStyle = css("--ink"); ctx.lineWidth = dpr; ctx.beginPath(); ctx.moveTo(nowX, 0); ctx.lineTo(nowX, H); ctx.stroke();
-  $("pulse-legend").innerHTML = `<span><span class="swatch home"></span> ${esc(teamName("home"))} in control ↑</span>
-    <span><span class="swatch away"></span> ${esc(teamName("away"))} in control ↓</span>
-    <span><span class="swatch" style="background:var(--chaos)"></span> chaos</span><span>dashed = shift confirmed (back-dated) · dot = goal</span>`;
+  if (!S.ended && S.matchT) {
+    const nowX = X(S.matchT / 60);
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = dpr; ctx.beginPath(); ctx.moveTo(nowX, top); ctx.lineTo(nowX, bottom); ctx.stroke();
+  }
+  $("pulse-legend").innerHTML = `<span><span class="swatch home"></span>${esc(teamShort("home"))} threat ↑</span>
+    <span><span class="swatch away"></span>${esc(teamShort("away"))} threat ↓</span>
+    <span>line = 5-minute balance</span><span>tinted background = who controls the game (cyan = broken)</span><span>dot = goal · dashed = shift confirmed</span>`;
 }
 
 function schedule() {
@@ -604,6 +865,19 @@ document.querySelectorAll(".tab").forEach((tab) =>
     if (tab.dataset.view === "fan") renderFan();
   }));
 $("start").addEventListener("click", start);
+function applyTheme(theme) {
+  if (theme) document.documentElement.dataset.theme = theme; else delete document.documentElement.dataset.theme;
+  const light = theme ? theme === "light" : matchMedia("(prefers-color-scheme: light)").matches;
+  $("theme").textContent = light ? "Dark" : "Light";
+  schedule();
+}
+$("theme").addEventListener("click", () => {
+  const light = $("theme").textContent === "Light";
+  const next = light ? "light" : "dark";
+  try { localStorage.setItem("wim-theme", next); } catch { /* private mode */ }
+  applyTheme(next);
+});
+try { applyTheme(localStorage.getItem("wim-theme")); } catch { applyTheme(null); }
 $("seed").addEventListener("keydown", (e) => { if (e.key === "Enter") start(); });
 window.addEventListener("resize", schedule);
 

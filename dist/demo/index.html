@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WhyItMatters</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@600;700;800&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,6 +23,7 @@
       </label>
       <label><input id="faults" type="checkbox"> Unreliable model</label>
       <button id="start" class="primary">Kick off</button>
+      <button id="theme" type="button" title="Switch between dark studio and light">Light</button>
     </div>
     <div class="badge" id="badge" title="Share of generated claims that matched the match state">
       <span class="dot"></span><span>Truth Score <b id="badge-score">100%</b></span>
@@ -27,36 +31,62 @@
   </header>
 
   <nav class="tabs" role="tablist">
-    <button class="tab" role="tab" id="tab-studio" data-view="studio" aria-selected="true">Studio</button>
+    <button class="tab" role="tab" id="tab-studio" data-view="studio" aria-selected="true">Match centre</button>
     <button class="tab" role="tab" id="tab-fan" data-view="fan" aria-selected="false">Fan</button>
     <button class="tab" role="tab" id="tab-trust" data-view="trust" aria-selected="false">Trust</button>
   </nav>
 
   <main>
     <section id="view-studio" class="view active" role="tabpanel" aria-labelledby="tab-studio">
-      <div class="scoreboard" id="scoreboard-studio"></div>
-      <div class="studio-grid">
-        <div>
-          <div class="card">
-            <h2>Pitch</h2>
-            <canvas id="pitch" aria-label="Recent events on the pitch"></canvas>
+      <div class="scorebug" id="scoreboard-studio"></div>
+      <div class="mc-grid">
+        <div class="mc-main">
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Pitch</h2>
+              <div class="seg" id="layers" aria-label="What the pitch shows">
+                <button data-layer="live" aria-pressed="true">Live</button>
+                <button data-layer="shape" aria-pressed="false">Shape</button>
+                <button data-layer="threat" aria-pressed="false">Threat map</button>
+                <button data-layer="passes" aria-pressed="false">Passes that hurt</button>
+                <button data-layer="shots" aria-pressed="false">Shots</button>
+              </div>
+              <div class="seg" id="layer-team" aria-label="Which team" hidden>
+                <button data-team="home" aria-pressed="true">Home</button>
+                <button data-team="away" aria-pressed="false">Away</button>
+              </div>
+            </div>
+            <canvas id="pitch" aria-label="The pitch, with the selected layer"></canvas>
+            <p class="caption" id="pitch-caption"></p>
             <div class="legend" id="pitch-legend"></div>
           </div>
-          <div class="card">
-            <h2>Match Pulse</h2>
-            <canvas id="pulse" aria-label="Dominance and chaos over time"></canvas>
+          <div class="panel">
+            <div class="panel-head"><h2>Momentum</h2><span class="hint">Threat each team created, minute by minute</span></div>
+            <canvas id="pulse" aria-label="Expected threat per minute and who controls the game"></canvas>
             <div class="legend" id="pulse-legend"></div>
           </div>
         </div>
-        <div class="card">
-          <h2>On air</h2>
-          <div class="rail" id="rail" aria-live="polite"></div>
-        </div>
+        <aside class="mc-side">
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Head to head</h2>
+              <div class="seg" id="h2h-scope" aria-label="Period">
+                <button data-scope="window" aria-pressed="true">Last 5 min</button>
+                <button data-scope="match" aria-pressed="false">Match</button>
+              </div>
+            </div>
+            <div class="h2h" id="h2h"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>On air</h2><span class="hint">Every number checked before it shows</span></div>
+            <div class="rail" id="rail" aria-live="polite"></div>
+          </div>
+        </aside>
       </div>
     </section>
 
     <section id="view-fan" class="view" role="tabpanel" aria-labelledby="tab-fan">
-      <div class="scoreboard" id="scoreboard-fan"></div>
+      <div class="scorebug" id="scoreboard-fan"></div>
       <div class="fan-controls">
         <label><span id="l-lang">Language</span>
           <select id="f-lang">
@@ -82,7 +112,7 @@
 
     <section id="view-trust" class="view" role="tabpanel" aria-labelledby="tab-trust">
       <div class="trust-grid" id="trust-grid"></div>
-      <h2 style="margin-top:16px">Verifier log</h2>
+      <h2 class="section-title">Verifier log</h2>
       <div class="verdicts" id="verdicts"></div>
     </section>
   </main>

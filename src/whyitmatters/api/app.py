@@ -35,7 +35,10 @@ from whyitmatters.agents.models import Cue, MetricTag, Mode, PersonalCue, Recap,
 from whyitmatters.eval import score_match, summarize
 from whyitmatters.eval.__main__ import EVAL_SEED_OFFSET
 from whyitmatters.eval.shape import ShapeScore, score_shapes
-from whyitmatters.schema import Match, MatchMeta, Side
+from whyitmatters.pulse import damage
+from whyitmatters.pulse import xt as xt_model
+from whyitmatters.pulse.shape import own_frame
+from whyitmatters.schema import PITCH_LENGTH, PITCH_WIDTH, Event, EventType, Match, MatchMeta, Side
 from whyitmatters.simulator import simulate
 
 DEFAULT_DURATION_S = 180.0  # a 90-minute match replays in about three minutes
@@ -143,6 +146,33 @@ def _why(orch: Orchestrator, cue: Cue) -> dict[str, Any]:
     }
 
 
+def _positions(ev: Event) -> list[int] | None:
+    """All 22 players at an event, home first then away, on one shared picture where the
+    home team attacks left to right: [hx1, hy1, ... hx11, hy11, ax1, ay1, ... ax11, ay11]."""
+    if ev.freeze is None:
+        return None
+    home = own_frame(ev, "home")
+    away = own_frame(ev, "away")
+    if home is None or away is None:
+        return None
+    away_abs = [(PITCH_LENGTH - x, PITCH_WIDTH - y) for x, y in away]
+    return [round(v) for x, y in [*home, *away_abs] for v in (x, y)]
+
+
+def _damage(ev: Event) -> dict[str, Any]:
+    """What a completed pass or carry did: xT added, lines broken, opponents bypassed."""
+    out: dict[str, Any] = {}
+    if ev.end_x is None or ev.type not in (EventType.PASS, EventType.CARRY):
+        return out
+    if ev.type == EventType.PASS and not damage.is_completed_pass(ev):
+        return out
+    out["xt"] = round(xt_model.added(ev.x, ev.y, ev.end_x, ev.end_y), 3)
+    if ev.type == EventType.PASS:
+        out["lb"] = damage.lines_broken(ev)
+        out["pk"] = damage.packing(ev)
+    return out
+
+
 def build_feed(orch: Orchestrator) -> list[dict[str, Any]]:
     """The orchestrator's bus as studio-ready records, in match-clock order."""
     cues = {c.cue_id: c for c in orch.cues}
@@ -150,7 +180,13 @@ def build_feed(orch: Orchestrator) -> list[dict[str, Any]]:
     for b in orch.bus:
         data = b["data"]
         if b["type"] == "event":
+            ev = orch.state.events.get(data["id"])
             data = _compact(data)
+            if ev is not None:
+                data.update(_damage(ev))
+                fz = _positions(ev)
+                if fz is not None:
+                    data["fz"] = fz
         elif b["type"] == "cue":
             data = {**data, "why": _why(orch, cues[data["cue_id"]])}
         feed.append({"type": b["type"], "t": b["t"], "data": data})

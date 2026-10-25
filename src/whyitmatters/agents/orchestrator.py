@@ -55,6 +55,10 @@ class Orchestrator:
         self.recap: Recap | None = None
         self.latencies_ms: list[float] = []
 
+    def _match_so_far(self, minute: int) -> dict[str, dict]:
+        w = self.state.pulse.counter.window(minute, minute + 1)
+        return {"home": w.home.model_dump(), "away": w.away.model_dump()}
+
     def _xt_minute(self, minute: int) -> dict[str, float]:
         bucket = self.state.pulse.counter.buckets.get(minute)
         if bucket is None:
@@ -159,6 +163,8 @@ class Orchestrator:
                         "turnovers_per_min": item.window.turnovers_per_min,
                         # xT generated in this single minute: the momentum chart's bars
                         "xt_minute": self._xt_minute(item.minute),
+                        # the whole match so far, for the head-to-head panel
+                        "match": self._match_so_far(item.minute),
                     },
                 )
             elif isinstance(item, Transition):

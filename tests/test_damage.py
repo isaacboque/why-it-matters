@@ -157,3 +157,16 @@ def test_damage_kinds_have_words_without_digits():
                 assert not any(ch.isdigit() for ch in ADVICE[ADVICE_FOR[kind]][lang])
     for lane in ("lane_left", "lane_centre", "lane_right"):
         assert set(PHRASES[lane]) == {"en", "es", "ca"}
+
+
+def test_the_feed_carries_positions_and_damage_for_the_match_centre(runs):
+    from whyitmatters.api.app import build_feed
+
+    _, o = runs[0]
+    feed = build_feed(o)
+    passes = [r["data"] for r in feed if r["type"] == "event" and r["data"]["type"] == "pass"]
+    assert all(len(p["fz"]) == 44 for p in passes)
+    done = [p for p in passes if p.get("outcome") == "complete"]
+    assert done and all({"xt", "lb", "pk"} <= p.keys() for p in done)
+    pulse = next(r["data"] for r in reversed(feed) if r["type"] == "pulse")
+    assert pulse["match"]["home"]["passes"] >= pulse["home"]["passes"]
