@@ -27,11 +27,28 @@ InsightKind = Literal[
     "direct_switch",  # a team goes long to bypass the press
     "pass_difficulty",  # hardest completed pass of the match so far
     "shot_speed",  # fastest shot of the match so far
+    "line_breakers",  # a team starts playing through the opponent's lines
+    "zone_damage",  # most of a team's threat comes down one lane
+    "momentum_swing",  # the side creating more threat (xT) flips
+    "shape_change",  # a team changes its shape in possession
+    "lines_stretched",  # the gap between a team's back line and midfield opens up
+    "most_dangerous_pass",  # one pass adds a lot of threat and takes players out of the game
 ]
 
 # Metrics a viewer can follow on their own ("My metric" in the Fan tab)
-MetricTag = Literal["pressing", "duels", "possession", "xg", "pass_quality", "speed"]
-METRIC_TAGS: tuple[str, ...] = ("pressing", "duels", "possession", "xg", "pass_quality", "speed")
+MetricTag = Literal[
+    "pressing", "duels", "possession", "xg", "pass_quality", "speed", "threat", "shape"
+]
+METRIC_TAGS: tuple[str, ...] = (
+    "pressing",
+    "duels",
+    "possession",
+    "xg",
+    "pass_quality",
+    "speed",
+    "threat",
+    "shape",
+)
 
 Metric = Literal[
     "possession_share",  # window, side
@@ -76,6 +93,19 @@ Metric = Literal[
     "compactness",  # convex hull area of the outfield players, m^2
     "formation_out",  # formation code, e.g. 442 for "4-4-2"
     "formation_in",
+    # damage, window + side (pulse/damage.py)
+    "line_breaks",  # completed passes that go past at least one opponent line
+    "packing",  # opponents taken out of the game by completed passes
+    "between_lines",  # passes received between the opponent's back line and midfield
+    "box_entries",
+    "zone14_entries",
+    "halfspace_entries",
+    "xt_share_left",  # share of the team's positive xT that ended in that lane
+    "xt_share_centre",
+    "xt_share_right",
+    # damage, event based
+    "pass_xt_added",  # xT added by one completed pass
+    "pass_packing",  # opponents one completed pass took out of the game
 ]
 
 # Claim metrics read straight off a team's rolling window
@@ -107,12 +137,31 @@ TEAM_WINDOW_METRICS = frozenset(
         "compactness",
         "formation_out",
         "formation_in",
+        "line_breaks",
+        "packing",
+        "between_lines",
+        "box_entries",
+        "zone14_entries",
+        "halfspace_entries",
+        "xt_share_left",
+        "xt_share_centre",
+        "xt_share_right",
     }
 )
 
 Unit = Literal[
-    "share", "count", "xg", "kmh", "rate", "minutes", "index", "seconds",
-    "metres", "m2", "formation", "xt",
+    "share",
+    "count",
+    "xg",
+    "kmh",
+    "rate",
+    "minutes",
+    "index",
+    "seconds",
+    "metres",
+    "m2",
+    "formation",
+    "xt",
 ]
 
 

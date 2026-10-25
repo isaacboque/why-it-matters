@@ -13,14 +13,24 @@ from whyitmatters.agents.models import Cue, PersonalCue, TrustStats, Viewer
 from whyitmatters.agents.verifier import Verifier
 
 # What each mode shows. Player focus keeps the match-defining moments plus the player's own.
-TACTICAL = {"press_surge", "midfield_battle", "danger_turnovers", "direct_switch"}
+TACTICAL = {
+    "press_surge",
+    "midfield_battle",
+    "danger_turnovers",
+    "direct_switch",
+    "line_breakers",
+    "zone_damage",
+    "momentum_swing",
+    "shape_change",
+    "lines_stretched",
+}
 MODE_KINDS = {
     "analyst": {"goal", "state_shift", "big_chance", "top_speed", "pass_master"}
     | TACTICAL
-    | {"pass_difficulty", "shot_speed"},
+    | {"pass_difficulty", "shot_speed", "most_dangerous_pass"},
     "fan": {"goal", "state_shift", "big_chance", "top_speed"}
     | TACTICAL
-    | {"pass_difficulty", "shot_speed"},
+    | {"pass_difficulty", "shot_speed", "most_dangerous_pass"},
     "player_focus": {"goal", "state_shift"},
     # the coach sees what is happening on the pitch, not individual records
     "coach": {"goal", "state_shift", "big_chance"} | TACTICAL,

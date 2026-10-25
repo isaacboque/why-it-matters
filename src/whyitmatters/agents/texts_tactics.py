@@ -366,3 +366,266 @@ ADVICE_FOR: dict[str, str] = {
     "danger_turnovers": "danger_turnovers",
     "direct_switch": "long_ball",
 }
+
+
+# Damage and shape (freeze frames + Expected Threat). {lane} is a LANE_PHRASES key.
+DAMAGE_TEMPLATES: Tpl = {
+    "line_breakers": {
+        "analyst": {
+            "en": (
+                "{team} are playing through the lines",
+                "{team} have played {#lb} passes past at least one {other} line in the last "
+                "{#win} minutes, and found a player between their lines {#bl} times.",
+            ),
+            "es": (
+                "{team} juega entre líneas",
+                "{team} ha dado {#lb} pases que superan al menos una línea de {other} en los "
+                "últimos {#win} minutos, y ha encontrado a un jugador entre sus líneas "
+                "{#bl} veces.",
+            ),
+            "ca": (
+                "{team} juga entre línies",
+                "{team} ha fet {#lb} passades que superen almenys una línia de {other} en els "
+                "últims {#win} minuts, i ha trobat un jugador entre les seves línies "
+                "{#bl} vegades.",
+            ),
+        },
+        "fan": {
+            "en": (
+                "{team} are cutting through",
+                "{team} keep finding passes through {other}: {#lb} of them in the last "
+                "{#win} minutes.",
+            ),
+            "es": (
+                "{team} está rompiendo líneas",
+                "{team} encuentra pases a través de {other} una y otra vez: {#lb} en los "
+                "últimos {#win} minutos.",
+            ),
+            "ca": (
+                "{team} està trencant línies",
+                "{team} troba passades a través de {other} una vegada i una altra: {#lb} en "
+                "els últims {#win} minuts.",
+            ),
+        },
+    },
+    "zone_damage": {
+        "analyst": {
+            "en": (
+                "{team} are hurting {other} {lane}",
+                "{#share} of the threat {team} have created in the last {#win} minutes came "
+                "{lane}: {#xt} expected threat in all.",
+            ),
+            "es": (
+                "{team} hace daño {lane}",
+                "El {#share} de la amenaza que ha generado {team} en los últimos {#win} "
+                "minutos llegó {lane}: {#xt} de amenaza esperada en total.",
+            ),
+            "ca": (
+                "{team} fa mal {lane}",
+                "El {#share} de l'amenaça que ha generat {team} en els últims {#win} minuts "
+                "ha arribat {lane}: {#xt} d'amenaça esperada en total.",
+            ),
+        },
+        "fan": {
+            "en": (
+                "Danger {lane}",
+                "{team} are getting joy {lane}: {#share} of their dangerous moves in the last "
+                "{#win} minutes went that way.",
+            ),
+            "es": (
+                "Peligro {lane}",
+                "{team} encuentra el camino {lane}: el {#share} de sus jugadas peligrosas en "
+                "los últimos {#win} minutos fue por ahí.",
+            ),
+            "ca": (
+                "Perill {lane}",
+                "{team} troba el camí {lane}: el {#share} de les jugades perilloses dels "
+                "últims {#win} minuts ha anat per allà.",
+            ),
+        },
+    },
+    "momentum_swing": {
+        "analyst": {
+            "en": (
+                "Momentum swings to {team}",
+                "{team} are now the more dangerous side: {#xt} expected threat in the last "
+                "{#win} minutes against {#xt_o} for {other}, who had been on top.",
+            ),
+            "es": (
+                "El impulso cambia hacia {team}",
+                "{team} es ahora el equipo más peligroso: {#xt} de amenaza esperada en los "
+                "últimos {#win} minutos frente a {#xt_o} de {other}, que llevaba la "
+                "iniciativa.",
+            ),
+            "ca": (
+                "L'impuls canvia cap a {team}",
+                "{team} és ara l'equip més perillós: {#xt} d'amenaça esperada en els últims "
+                "{#win} minuts davant {#xt_o} de {other}, que portava la iniciativa.",
+            ),
+        },
+        "fan": {
+            "en": (
+                "{team} have the momentum",
+                "The tide has turned: {team} are the ones carrying the threat now, "
+                "{#xt} to {#xt_o} in the last {#win} minutes.",
+            ),
+            "es": (
+                "{team} tiene el impulso",
+                "Ha cambiado la marea: ahora el peligro lo lleva {team}, {#xt} a {#xt_o} en "
+                "los últimos {#win} minutos.",
+            ),
+            "ca": (
+                "{team} té l'impuls",
+                "Ha canviat la marea: ara el perill el porta {team}, {#xt} a {#xt_o} en els "
+                "últims {#win} minuts.",
+            ),
+        },
+    },
+    "shape_change": {
+        "analyst": {
+            "en": (
+                "{team} change shape",
+                "With the ball, {team} have moved from a {#was} to a {#now} over the last "
+                "{#win} minutes.",
+            ),
+            "es": (
+                "{team} cambia el dibujo",
+                "Con balón, {team} ha pasado de un {#was} a un {#now} en los últimos {#win} "
+                "minutos.",
+            ),
+            "ca": (
+                "{team} canvia el dibuix",
+                "Amb pilota, {team} ha passat d'un {#was} a un {#now} en els últims {#win} minuts.",
+            ),
+        },
+        "fan": {
+            "en": (
+                "{team} have switched it up",
+                "New shape for {team} on the ball: a {#now} now, after a {#was}.",
+            ),
+            "es": (
+                "{team} cambia el sistema",
+                "Nuevo dibujo de {team} con balón: ahora un {#now}, antes un {#was}.",
+            ),
+            "ca": (
+                "{team} canvia el sistema",
+                "Nou dibuix de {team} amb pilota: ara un {#now}, abans un {#was}.",
+            ),
+        },
+    },
+    "lines_stretched": {
+        "analyst": {
+            "en": (
+                "{team} are stretched",
+                "Without the ball, {team} now leave {#now} between their back line and "
+                "midfield, up from {#was}. That is space for {other} to receive in.",
+            ),
+            "es": (
+                "{team} está estirado",
+                "Sin balón, {team} deja ahora {#now} entre su defensa y el centro del campo, "
+                "frente a {#was} antes. Es espacio para que {other} reciba.",
+            ),
+            "ca": (
+                "{team} està estirat",
+                "Sense pilota, {team} deixa ara {#now} entre la defensa i el mig del camp, "
+                "davant {#was} abans. És espai perquè {other} rebi.",
+            ),
+        },
+        "fan": {
+            "en": (
+                "Gaps are opening for {other}",
+                "{team}'s lines have pulled apart: {#now} between defence and midfield, "
+                "from {#was}.",
+            ),
+            "es": (
+                "Se abren huecos para {other}",
+                "Las líneas de {team} se han separado: {#now} entre defensa y medio, antes {#was}.",
+            ),
+            "ca": (
+                "S'obren forats per a {other}",
+                "Les línies de {team} s'han separat: {#now} entre defensa i mig, abans {#was}.",
+            ),
+        },
+    },
+    "most_dangerous_pass": {
+        "analyst": {
+            "en": (
+                "{player} breaks it open",
+                "{player}'s pass took {#pk} {other} players out of the game and added "
+                "{#xt} expected threat.",
+            ),
+            "es": (
+                "{player} rompe el partido",
+                "El pase de {player} dejó fuera a {#pk} jugadores de {other} y sumó {#xt} de "
+                "amenaza esperada.",
+            ),
+            "ca": (
+                "{player} trenca el partit",
+                "La passada de {player} va deixar fora {#pk} jugadors de {other} i va sumar "
+                "{#xt} d'amenaça esperada.",
+            ),
+        },
+        "fan": {
+            "en": (
+                "What a ball from {player}!",
+                "One pass, {#pk} {other} players taken out. That's how you open a defence.",
+            ),
+            "es": (
+                "¡Qué pase de {player}!",
+                "Un pase y {#pk} jugadores de {other} fuera de la jugada. Así se abre una defensa.",
+            ),
+            "ca": (
+                "Quina passada de {player}!",
+                "Una passada i {#pk} jugadors de {other} fora de la jugada. Així s'obre una "
+                "defensa.",
+            ),
+        },
+    },
+}
+TEMPLATES.update(DAMAGE_TEMPLATES)
+
+# Where the threat came from (slot "lane"), from the attacking team's point of view
+LANE_PHRASES: dict[str, dict[str, str]] = {
+    "lane_left": {"en": "down the left", "es": "por la izquierda", "ca": "per l'esquerra"},
+    "lane_centre": {"en": "through the middle", "es": "por el centro", "ca": "pel centre"},
+    "lane_right": {"en": "down the right", "es": "por la derecha", "ca": "per la dreta"},
+}
+
+DAMAGE_ADVICE: dict[str, dict[str, str]] = {
+    "line_breakers": {
+        "en": "{other} could step a midfielder in to screen the passing lane into the gap.",
+        "es": "{other} podría adelantar a un mediocentro para tapar la línea de pase al hueco.",
+        "ca": "{other} podria avançar un migcampista per tapar la línia de passada al forat.",
+    },
+    "zone_damage": {
+        "en": "{other} could shift the block and double up {lane}.",
+        "es": "{other} podría bascular el bloque y doblar la marca {lane}.",
+        "ca": "{other} podria bascular el bloc i doblar la marca {lane}.",
+    },
+    "momentum": {
+        "en": "{other} could slow the game down and keep the ball for a spell.",
+        "es": "{other} podría pausar el partido y tener el balón un rato.",
+        "ca": "{other} podria pausar el partit i tenir la pilota una estona.",
+    },
+    "shape_change": {
+        "en": "{other} could match the new shape so nobody is left free between the lines.",
+        "es": "{other} podría igualar el nuevo dibujo para no dejar a nadie libre entre líneas.",
+        "ca": "{other} podria igualar el nou dibuix per no deixar ningú lliure entre línies.",
+    },
+    "stretched": {
+        "en": "{team} could push the back line up or drop a midfielder to close the gap.",
+        "es": "{team} podría subir la defensa o bajar a un mediocentro para cerrar el hueco.",
+        "ca": "{team} podria pujar la defensa o baixar un migcampista per tancar el forat.",
+    },
+}
+ADVICE.update(DAMAGE_ADVICE)
+ADVICE_FOR.update(
+    {
+        "line_breakers": "line_breakers",
+        "zone_damage": "zone_damage",
+        "momentum_swing": "momentum",
+        "shape_change": "shape_change",
+        "lines_stretched": "stretched",
+        "most_dangerous_pass": "line_breakers",
+    }
+)

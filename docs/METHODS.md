@@ -8,7 +8,7 @@ Every number WhyItMatters puts on screen comes from one of the methods below. Fo
 2. **Open code and unit tests on hand-built plays.** Each metric has tests on small event sequences built by hand, so the expected answer is known exactly (for example: "this interception 4 s after losing the ball is a counter-press recovery").
 3. **Evaluation against planted ground truth.** The simulator knows what really happened: who controlled each phase, which shape each team played, which chances mattered. We measure the engine against it on held-out matches, and CI fails if any score drops below target. This is not possible with real data, where nobody knows the truth.
 4. **Every number is traceable.** Each on-screen claim carries the event ids behind it; the "Why?" sheet in the app shows them.
-5. **The Verifier.** Before anything airs, an independent agent recomputes every claimed number from the raw event log, freeze frames included, and rejects any number in the text that no claim supports. With a model that deliberately mis-states 30 % of first drafts, 0.92 of all generated claims are true, yet on-air accuracy stays at 1.00 because every wrong draft is caught and rewritten.
+5. **The Verifier.** Before anything airs, an independent agent recomputes every claimed number from the raw event log, freeze frames included, and rejects any number in the text that no claim supports. With a model that deliberately mis-states 30 % of first drafts, 0.93 of all generated claims are true, yet on-air accuracy stays at 1.00 because every wrong draft is caught and rewritten.
 
 All coordinates below are the acting team's own: attacking left to right, x = 0 own goal line, 105 × 68 m pitch.
 
@@ -76,6 +76,34 @@ xT(z) = P(shot | z) · mean xG of shots from z + P(move | z) · Σ_z' T(z → z'
 Tests: `tests/test_shape.py::test_xt_grows_towards_goal` and `tests/test_shape.py::test_xt_added_is_end_minus_start`.
 
 **Known limitation.** The grid is fitted on simulated matches, so its values describe the simulator's football. The method is the same with real event data; only the input changes. Refit with `python -m whyitmatters.pulse.xt --fit --seeds 200`.
+
+## Damage: which passes hurt
+
+Computed per completed pass from its freeze frame, then summed per team and window (`pulse/damage.py`). All in the passer's coordinates.
+
+| Metric | Formula and parameters | Source | Test |
+| --- | --- | --- | --- |
+| Packing | opponent outfield players standing goal-side of the passer and behind the reception point (start x < opponent x < end x), on the pass's frame | after Impect's packing; one frame, not tracked through the pass | `tests/test_damage.py::test_packing_counts_the_opponents_a_pass_goes_past` |
+| Line-breaking pass | completed, ends ≥ 10 % closer to the centre of goal, and goes past at least one opponent line (lines detected on the frame as in Team shape) | after Hudl StatsBomb's line-breaking passes, **simplified**: lines come from depth alone, not from who the ball passes between | `tests/test_damage.py::test_line_breaking_needs_a_goalward_pass_past_a_line` |
+| Reception between the lines | completed pass received between the opponent's back line and the line in front of it | common analyst definition | `tests/test_damage.py::test_reception_between_the_lines` |
+| Box, zone 14, half-space entries | completed pass or carry that ends in the area from outside it. Box: x ≥ 88.5, 13.84 ≤ y ≤ 54.16. Zone 14: 70 ≤ x < 88.5, middle third of the width. Half-spaces: final third, between the box edge and the middle third | standard pitch zones | `tests/test_damage.py::test_zone_entries_and_lanes` |
+| Threat by lane | share of the team's positive xT that ended in the left, central or right third of the width (y = 0 is the attacking team's left) | ours | `tests/test_damage.py::test_window_damage_metrics` |
+| Most dangerous pass | the completed pass with the largest xT added | ours, on Karun Singh's xT | same |
+
+## Damage and shape insights
+
+The Tactics agent compares the last 5 minutes with the 5 before (`agents/tactics.py`). Thresholds were set on seeds 0-39; one tactical insight at most every 6 minutes, with a per-kind cooldown.
+
+| Insight | Fires when | Claims the Verifier checks |
+| --- | --- | --- |
+| Playing through the lines | ≥ 9 line-breaking passes, ≥ 4 more than the opponent and ≥ 4 more than the window before | line-breaking passes, receptions between the lines |
+| Danger down one lane | xT ≥ 0.15, ≥ 1.5 × the opponent's, and ≥ 60 % of it down one flank (80 % through the middle, where most threat goes anyway) | lane share, xT |
+| Momentum swing | xT ahead by ≥ 0.12 after being ≥ 0.05 behind in the window before | both teams' xT |
+| Change of shape | the in-possession formation over the last 8 minutes differs from the 8 before, and the windows ending 2 minutes earlier agree with each reading | formation now and before |
+| Stretched lines | out of possession, the gap between back line and midfield ≥ 16.5 m and ≥ 3 m wider than before, with the team ≥ 33 m long | gap now and before |
+| The pass that broke it open | a completed pass adds ≥ 0.09 xT and bypasses ≥ 3 opponents | xT added, opponents bypassed |
+
+**Validation.** Shape changes are planted by the simulator, so they can be checked: 0.84 of reported changes (43/51) match a scripted change of shape in possession on held-out seeds 1000-1019. Stretched lines fall inside a scripted broken (chaos) spell, where the simulator opens the gap to 17 m, in 0.77 of cases (10/13). Tests: `tests/test_damage.py::test_shape_changes_match_the_planted_shapes` and `tests/test_damage.py::test_stretched_lines_come_from_broken_games`.
 
 ## Freeze frames
 

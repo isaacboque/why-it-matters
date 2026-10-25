@@ -12,7 +12,7 @@ const I18N = {
     full: "Full time", moments: "Moments that decided it", recap: "Recap", close: "Close", foryou: "for you",
     verified: "verified", kickoff: "Kick-off",
     coach: "Coach view", metric: "My metric", all: "Everything",
-    m: { pressing: "Pressing", duels: "Duels", possession: "Possession", xg: "xG (chances)", pass_quality: "Pass quality", speed: "Speed" },
+    m: { pressing: "Pressing", duels: "Duels", possession: "Possession", xg: "xG (chances)", pass_quality: "Pass quality", speed: "Speed", threat: "Threat (xT)", shape: "Team shape" },
   },
   es: {
     lang: "Idioma", mode: "Quiero ver", club: "Mi club", player: "Mi jugador", none: "— ninguno —",
@@ -20,7 +20,7 @@ const I18N = {
     full: "Final", moments: "Los momentos que decidieron", recap: "Resumen", close: "Cerrar", foryou: "para ti",
     verified: "verificado", kickoff: "Saque inicial",
     coach: "Vista de entrenador", metric: "Mi métrica", all: "Todo",
-    m: { pressing: "Presión", duels: "Duelos", possession: "Posesión", xg: "xG (ocasiones)", pass_quality: "Calidad de pase", speed: "Velocidad" },
+    m: { pressing: "Presión", duels: "Duelos", possession: "Posesión", xg: "xG (ocasiones)", pass_quality: "Calidad de pase", speed: "Velocidad", threat: "Amenaza (xT)", shape: "Dibujo" },
   },
   ca: {
     lang: "Idioma", mode: "Vull veure", club: "El meu club", player: "El meu jugador", none: "— cap —",
@@ -28,7 +28,7 @@ const I18N = {
     full: "Final", moments: "Els moments que ho van decidir", recap: "Resum", close: "Tanca", foryou: "per a tu",
     verified: "verificat", kickoff: "Servei inicial",
     coach: "Vista d'entrenador", metric: "La meva mètrica", all: "Tot",
-    m: { pressing: "Pressió", duels: "Duels", possession: "Possessió", xg: "xG (ocasions)", pass_quality: "Qualitat de passada", speed: "Velocitat" },
+    m: { pressing: "Pressió", duels: "Duels", possession: "Possessió", xg: "xG (ocasions)", pass_quality: "Qualitat de passada", speed: "Velocitat", threat: "Amenaça (xT)", shape: "Dibuix" },
   },
 };
 
@@ -44,6 +44,12 @@ const METRICS = {
   pressures: "Pressures", pass_difficulty: "Pass difficulty", shot_speed_kmh: "Shot speed (km/h)",
   buildup_seconds: "Seconds from winning the ball to the shot", counter_press_in_move: "Move began with a counter-press",
   long_balls_in_move: "Long balls in the move",
+  xt: "Expected threat (xT)", formation_in: "Shape in possession", formation_out: "Shape out of possession",
+  gap_def_mid: "Gap, defence to midfield", team_length: "Team length", line_height: "Back-line height",
+  line_breaks: "Line-breaking passes", packing: "Opponents bypassed", between_lines: "Received between the lines",
+  box_entries: "Box entries", zone14_entries: "Zone 14 entries", halfspace_entries: "Half-space entries",
+  xt_share_left: "Threat down the left", xt_share_centre: "Threat through the middle", xt_share_right: "Threat down the right",
+  pass_xt_added: "xT added by the pass", pass_packing: "Opponents the pass bypassed",
 };
 const UNITS = {
   possession_share: "share", pass_completion: "share", field_tilt: "share", turnovers_per_min: "rate",
@@ -54,11 +60,16 @@ const UNITS = {
   progressive_passes: "count", long_ball_share: "share", central_buildup_share: "share", ppda: "rate",
   pressures: "count", pass_difficulty: "index", shot_speed_kmh: "kmh", buildup_seconds: "seconds",
   counter_press_in_move: "count", long_balls_in_move: "count",
+  xt: "xg", formation_in: "formation", formation_out: "formation", gap_def_mid: "metres", team_length: "metres",
+  line_height: "metres", line_breaks: "count", packing: "count", between_lines: "count", box_entries: "count",
+  zone14_entries: "count", halfspace_entries: "count", xt_share_left: "share", xt_share_centre: "share",
+  xt_share_right: "share", pass_xt_added: "xg", pass_packing: "count",
 };
 const KINDS = {
   goal: "goal", state_shift: "shift", big_chance: "chance", top_speed: "speed", pass_master: "passing",
   press_surge: "press", midfield_battle: "midfield", danger_turnovers: "danger", direct_switch: "long ball",
-  pass_difficulty: "hard pass", shot_speed: "shot speed",
+  pass_difficulty: "hard pass", shot_speed: "shot speed", line_breakers: "line breaks", zone_damage: "danger zone",
+  momentum_swing: "momentum", shape_change: "shape", lines_stretched: "stretched", most_dangerous_pass: "killer pass",
 };
 
 const S = {};
@@ -86,6 +97,8 @@ function fmtVal(unit, v) {
   if (unit === "share") return `${Math.round(v * 100)}%`;
   if (unit === "xg" || unit === "index") return v.toFixed(2);
   if (unit === "rate") return v.toFixed(1);
+  if (unit === "formation") return String(Math.round(v)).split("").join("-");
+  if (unit === "metres") return `${Math.round(v)} m`;
   return String(Math.round(v));
 }
 const baseLang = (lang) => String(lang || "en").split("-")[0].toLowerCase();
@@ -326,7 +339,7 @@ document.addEventListener("click", (e) => {
 
 // ----------------------------------------------------------------------------- fan view
 const MODES = ["fan", "player_focus", "analyst", "coach"];
-const METRIC_KEYS = ["pressing", "duels", "possession", "xg", "pass_quality", "speed"];
+const METRIC_KEYS = ["pressing", "duels", "possession", "xg", "pass_quality", "speed", "threat", "shape"];
 function buildSelectors() {
   const v = S.viewer;
   const t = T();

@@ -20,6 +20,12 @@ ON_SCREEN_SECONDS = {
     "direct_switch": 15.0,
     "pass_difficulty": 10.0,
     "shot_speed": 10.0,
+    "line_breakers": 15.0,
+    "zone_damage": 15.0,
+    "momentum_swing": 15.0,
+    "shape_change": 15.0,
+    "lines_stretched": 15.0,
+    "most_dangerous_pass": 12.0,
 }
 MIN_SIGNIFICANCE = 0.3
 MAX_DELAY_S = 90.0  # an insight that cannot air within this long of happening is stale

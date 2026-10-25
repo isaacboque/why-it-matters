@@ -11,11 +11,26 @@ from whyitmatters.agents.drivers import DRIVERS, driver_claims, drivers_of
 from whyitmatters.agents.faults import FaultInjector
 from whyitmatters.agents.generator import TemplateGenerator, TextGenerator, render_with_source
 from whyitmatters.agents.models import Claim, Draft, InsightCandidate, Verdict
+from whyitmatters.agents.tactics import damage_lane
 from whyitmatters.agents.texts_tactics import ADVICE_FOR
+from whyitmatters.pulse import damage
+from whyitmatters.pulse import xt as xt_model
 from whyitmatters.pulse.buildup import MAX_MOVE_S, MIN_MOVE_S, analyse_buildup
 from whyitmatters.schema import Side
 
-TACTICAL_KINDS = frozenset({"press_surge", "midfield_battle", "danger_turnovers", "direct_switch"})
+TACTICAL_KINDS = frozenset(
+    {
+        "press_surge",
+        "midfield_battle",
+        "danger_turnovers",
+        "direct_switch",
+        "line_breakers",
+        "zone_damage",
+        "momentum_swing",
+        "shape_change",
+        "lines_stretched",
+    }
+)
 
 # which "My metric" threads a template belongs to (drivers and build-up add more)
 TEMPLATE_TAGS: dict[str, tuple[str, ...]] = {
@@ -33,6 +48,12 @@ TEMPLATE_TAGS: dict[str, tuple[str, ...]] = {
     "midfield_battle": ("duels",),
     "danger_turnovers": ("possession",),
     "direct_switch": ("pass_quality", "pressing"),
+    "line_breakers": ("threat", "pass_quality"),
+    "zone_damage": ("threat",),
+    "momentum_swing": ("threat",),
+    "shape_change": ("shape",),
+    "lines_stretched": ("shape",),
+    "most_dangerous_pass": ("threat", "pass_quality"),
 }
 
 
@@ -266,6 +287,24 @@ class Explainer:
                     ),
                 ],
             )
+        if cand.kind == "most_dangerous_pass":
+            assert damage.is_completed_pass(ev), "most_dangerous_pass needs a completed pass"
+            slots["advice"] = ADVICE_FOR[cand.kind]
+            return (
+                "most_dangerous_pass",
+                slots,
+                [
+                    Claim(
+                        key="xt", metric="pass_xt_added", unit="xt", event_id=ev.id,
+                        value=round(xt_model.added(ev.x, ev.y, ev.end_x, ev.end_y), 3),
+                        tolerance=0.006,
+                    ),
+                    Claim(
+                        key="pk", metric="pass_packing", unit="count", event_id=ev.id,
+                        value=damage.packing(ev),
+                    ),
+                ],
+            )  # fmt: skip
         if cand.kind == "pass_difficulty":
             return (
                 "pass_difficulty",
@@ -357,6 +396,59 @@ class Explainer:
                 slots,
                 [claim("n", "own_half_losses", "count", me.own_half_losses, side), window_claim],
             )
+        if cand.kind == "line_breakers":
+            return (
+                "line_breakers",
+                slots,
+                [
+                    claim("lb", "line_breaks", "count", me.line_breaks, side),
+                    claim("bl", "between_lines", "count", me.between_lines, side),
+                    window_claim,
+                ],
+            )
+        if cand.kind == "zone_damage":
+            lane = damage_lane(me) or "centre"
+            slots["lane"] = f"lane_{lane}"
+            share = getattr(me, f"xt_share_{lane}") or 0.0
+            return (
+                "zone_damage",
+                slots,
+                [
+                    claim("share", f"xt_share_{lane}", "share", share, side, 0.006),
+                    claim("xt", "xt", "xt", me.xt, side, 0.006),
+                    window_claim,
+                ],
+            )
+        if cand.kind == "momentum_swing":
+            return (
+                "momentum_swing",
+                slots,
+                [
+                    claim("xt", "xt", "xt", me.xt, side, 0.006),
+                    claim("xt_o", "xt", "xt", opp.xt, _other(side), 0.006),
+                    window_claim,
+                ],
+            )
+        if cand.kind in ("shape_change", "lines_stretched"):
+            size = win[1] - win[0] + 1
+            was_win = (win[0] - size, win[1] - size)
+            b = state.pulse.counter.window(was_win[1], size)
+            was = b.home if side == "home" else b.away
+            metric, unit, tol = (
+                ("formation_in", "formation", 0.0)
+                if cand.kind == "shape_change"
+                else ("gap_def_mid", "metres", 0.06)
+            )
+            before = Claim(
+                key="was", metric=metric, unit=unit, side=side, window=was_win, tolerance=tol,
+                value=getattr(was, metric) or 0.0,
+            )  # type: ignore[arg-type]  # fmt: skip
+            return (
+                cand.kind,
+                slots,
+                [claim("now", metric, unit, getattr(me, metric) or 0.0, side, tol), before,
+                 window_claim],
+            )  # fmt: skip
         # direct_switch: the team going long, and how hard the other side presses it
         return (
             "direct_switch",

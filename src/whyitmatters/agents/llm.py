@@ -100,6 +100,18 @@ METRIC_WORDS = {
     "buildup_seconds": "seconds from winning the ball to the shot",
     "counter_press_in_move": "1 if the move began with a counter-press",
     "long_balls_in_move": "long balls in the move",
+    "xt": "expected threat (xT) the team added with passes and carries",
+    "formation_in": "shape in possession",
+    "formation_out": "shape out of possession",
+    "gap_def_mid": "metres between the back line and midfield",
+    "line_breaks": "passes that went past at least one opponent line",
+    "packing": "opponents taken out of the game by passes",
+    "between_lines": "passes received between the opponent's lines",
+    "xt_share_left": "share of the team's threat that came down the left",
+    "xt_share_centre": "share of the team's threat that came through the middle",
+    "xt_share_right": "share of the team's threat that came down the right",
+    "pass_xt_added": "expected threat (xT) the pass added",
+    "pass_packing": "opponents the pass took out of the game",
 }
 
 
