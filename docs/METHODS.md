@@ -1,0 +1,124 @@
+# Methods sheet
+
+Every number WhyItMatters puts on screen comes from one of the methods below. For each one this sheet gives the formula, our parameters, where the definition comes from, the test that pins it down and how it is validated. Data format and calibration are in [DATA.md](DATA.md).
+
+## How we know it's right
+
+1. **Published definitions.** Where the football analytics community already has a definition, we use it and cite it: Expected Threat, line-breaking passes, PPDA. Where we simplified one, this sheet says so.
+2. **Open code and unit tests on hand-built plays.** Each metric has tests on small event sequences built by hand, so the expected answer is known exactly (for example: "this interception 4 s after losing the ball is a counter-press recovery").
+3. **Evaluation against planted ground truth.** The simulator knows what really happened: who controlled each phase, which shape each team played, which chances mattered. We measure the engine against it on held-out matches, and CI fails if any score drops below target. This is not possible with real data, where nobody knows the truth.
+4. **Every number is traceable.** Each on-screen claim carries the event ids behind it; the "Why?" sheet in the app shows them.
+5. **The Verifier.** Before anything airs, an independent agent recomputes every claimed number from the raw event log, freeze frames included, and rejects any number in the text that no claim supports. With a model that deliberately mis-states 30 % of first drafts, 0.92 of all generated claims are true, yet on-air accuracy stays at 1.00 because every wrong draft is caught and rewritten.
+
+All coordinates below are the acting team's own: attacking left to right, x = 0 own goal line, 105 × 68 m pitch.
+
+## Match state (Match Pulse)
+
+Computed over a rolling 5-minute window (`pulse/metrics.py`, `pulse/engine.py`).
+
+| Metric | Formula and parameters | Source | Test |
+| --- | --- | --- | --- |
+| Possession share | in-play seconds with the ball / all in-play seconds; gaps > 20 s are dead ball | standard | `tests/test_pulse.py::test_indices_in_range` |
+| Pass completion | completed / attempted passes | standard | `tests/test_simulator.py::test_realistic_volumes` |
+| Field tilt | team's passes made at x ≥ 70 / both teams' passes at x ≥ 70 | common analytics definition | `tests/test_pulse.py::test_indices_in_range` |
+| PPDA | opponent passes in their own 60 % (x ≤ 63) / our defensive actions (tackles, interceptions, fouls) at x ≥ 42; lower = harder press | Colin Trainor's PPDA, as widely used | `tests/test_pulse.py::test_ppda_counts_only_press_zone_actions` |
+| Turnovers per minute | open-play losses (ball won by the opponent, or put out) per minute, both teams | ours | `tests/test_tactics.py::test_own_half_losses_are_dangerous_losses` |
+| Dominance index | 0.5 × (2 × possession − 1) + 0.5 × (2 × completion gap), smoothed by an exponential moving average with weight 0.6 on the newest minute; in [−1, 1] | ours; field tilt was tested and dropped as too noisy | `tests/test_pulse.py::test_classify_thresholds` |
+| Chaos index | 0.5 × clip((turnovers/min − 2) / 3.5) + 0.5 × clip((0.82 − mean completion) / 0.27); in [0, 1] | ours | same |
+| State | chaos if chaos ≥ 0.55; else home/away control if dominance ≥ +0.25 / ≤ −0.25; else balanced. A change is confirmed after 3 consecutive minutes and back-dated by half a window | ours | `tests/test_pulse.py::test_transitions_change_state_and_cite_evidence` |
+
+**Validation.** On 20 held-out matches (seeds 1000+), a shift is counted as detected when it is confirmed within ±4 minutes with the correct new state. Results: recall 0.87, precision 0.67, timeline accuracy 0.82, mean confirmation lag 5.4 minutes. Run `python -m whyitmatters.eval --seeds 20 --check` to reproduce.
+
+**Known limitation.** The confirmation lag is the price of avoiding false alarms. Live claims therefore say "over the last five minutes".
+
+## Tactical metrics
+
+| Metric | Formula and parameters | Source | Test |
+| --- | --- | --- | --- |
+| Duels won by zone | every tackle (won or lost) and interception; the winner is credited in their own third (defensive x < 35, middle, attacking x ≥ 70) | ours | `tests/test_tactics.py::test_duels_credit_the_winner_in_their_own_third` |
+| Duel share by zone | our wins in a zone / (our wins + opponent wins on the same patch of grass, i.e. the mirrored third) | ours | `tests/test_tactics.py::test_duel_share_pairs_a_teams_attacking_third_with_the_others_defensive_third` |
+| High / final-third recoveries | ball won (tackle won or interception) at x ≥ 52.5 / x ≥ 70 | in the spirit of Opta's "high turnovers" | `tests/test_tactics.py::test_recoveries_high_and_in_the_final_third` |
+| Counter-press recoveries | ball won back within 5 s of the same team losing it | ours | `tests/test_tactics.py::test_counter_press_needs_the_ball_back_within_five_seconds` |
+| Own-half losses | possession lost at x < 52.5 | ours | `tests/test_tactics.py::test_own_half_losses_are_dangerous_losses` |
+| Progressive passes | completed passes that move the ball ≥ 10 m towards goal, or from outside into the final third | **simplified.** Providers use distance rules that grow with distance from goal; aligning to one is proposed, not done | `tests/test_tactics.py::test_progressive_passes_move_the_ball_towards_goal_or_into_the_final_third` |
+| Long-ball share | passes ≥ 30 m / all passes | ours; Opta counts long balls at 32 m, and the calibration table uses 32 m | `tests/test_tactics.py::test_long_ball_and_central_buildup_shares` |
+| Central build-up share | build-up passes (x ≤ 63) started in the central third of the width / all build-up passes | ours | same |
+
+**Driver attribution.** When a control shift is confirmed, each tactical metric is compared head to head (ours minus theirs) between the window before and the window after. Defensive counts are judged per opponent possession, and each change is normalised by what counts as a big move for that metric. The top 2-3 changes become the "why" in the explanation, each a claim the Verifier checks.
+
+Validation: in control phases, the scripted dominant team presses (press 0.7 against 0.1), so a pressing metric should be among the drivers. It is in 0.71 of correctly detected shifts on tuning seeds 0-19, and 0.79 on held-out seeds 1000-1019 (`tests/test_tactics.py::test_driver_attribution_finds_the_scripted_press`).
+
+## Chances
+
+| Metric | Formula and parameters | Source | Test |
+| --- | --- | --- | --- |
+| xG | logistic(−1.25 + 1.6 × opening angle to the posts (rad) − 0.09 × distance to goal (m)); × 0.7 under pressure; clipped to [0.01, 0.95] | distance + angle is the textbook first xG model; coefficients ours, calibrated so goals per match match the league average | `tests/test_simulator.py::test_xg_is_monotonic_with_distance` |
+| Big chance | a shot with xG ≥ 0.3 | common threshold | `tests/test_agents.py::test_analyst_finds_every_goal_and_big_chance` |
+| Build-up of a shot | the shot's possession; it began with a recovery when the event before it is a won tackle or interception by the shooting team; seconds from recovery to shot; completed long balls in the move | ours | `tests/test_tactics.py::test_buildup_reads_a_high_recovery_followed_by_a_long_ball` |
+
+## Value: Expected Threat (xT)
+
+Position-based xT, introduced by [Karun Singh in 2018](https://soccermatics.readthedocs.io/en/main/lesson4/xTPos.html).
+
+- **Grid:** 16 × 12 cells.
+- **Fit:** on simulator seeds 0-199 (`pulse/xt.py`, grid shipped as `pulse/xt_grid.json`).
+
+```text
+xT(z) = P(shot | z) · mean xG of shots from z + P(move | z) · Σ_z' T(z → z') · xT(z')
+```
+
+- **Moves:** passes and carries.
+- **T(z → z'):** the share of moves from z that succeed and end in z'. Failed moves add nothing.
+- **Solving:** iterate 40 times from zero.
+- **Value of an action:** xT added = xT(end) − xT(start), for completed passes and carries.
+- **Sums:** per team and window, per minute (the momentum chart) and per 6 × 3 zone (the damage map).
+
+Tests: `tests/test_shape.py::test_xt_grows_towards_goal` and `tests/test_shape.py::test_xt_added_is_end_minus_start`.
+
+**Known limitation.** The grid is fitted on simulated matches, so its values describe the simulator's football. The method is the same with real event data; only the input changes. Refit with `python -m whyitmatters.pulse.xt --fit --seeds 200`.
+
+## Freeze frames
+
+Positions of all 22 players at every on-ball event (`simulator/positions.py`). They are generated in a post-pass that never touches the event generator's random stream.
+
+Each team plays a role per phase. The role sets its shape in possession (4-3-3, or 3-2-5 when dominant) and out of possession (4-4-2, or a 4-5-1 low block when dominated), its back-line height (high 46 m, mid 34 m, low 22 m from goal), its width and the gap between lines (17 m when the game is chaotic).
+
+From the role, each frame is built in four steps:
+
+1. **Targets follow the ball.** The back line never stands in front of a ball near its own goal, and the block shifts sideways towards the ball.
+2. **Players move at human speed.** Each moves towards its target at most 8.5 m/s between frames.
+3. **The actor is placed exactly.** The acting player stands at the event location.
+4. **Noise.** About 1 m of persistent noise per player, plus about 1 m of jitter per frame.
+
+Tests: `tests/test_shape.py::test_players_move_at_human_speeds` and `tests/test_shape.py::test_actor_stands_at_the_event`.
+
+## Team shape
+
+All shape metrics come from average positions over the window, in and out of possession (`pulse/shape.py`).
+
+| Metric | Formula and parameters | Test |
+| --- | --- | --- |
+| Formation | sort the 10 outfield players by depth; start a new line wherever the next player is more than 7.5 m deeper; merge or split to keep 3-4 lines; the label counts players per line from back to front | `tests/test_shape.py::test_templates_are_detected` |
+| Line height | mean depth of the back line, metres from own goal | `tests/test_shape.py::test_shape_summary_numbers` |
+| Gaps between lines | first-to-second line and second-last-to-last line, in metres | same |
+| Length, width | spread of the outfield players | same |
+| Compactness | convex-hull area of the outfield players, m² | `tests/test_shape.py::test_hull_area_of_a_square` |
+| Block | out-of-possession line height: high ≥ 30 m, low < 20 m, otherwise mid (set on seeds 0-39) | `tests/test_shape.py::test_block_thresholds` |
+
+**Validation.** On 5-minute windows inside a scripted phase on held-out seeds:
+
+| Measure | Result | Target |
+| --- | --- | --- |
+| Formation out of possession | 0.75 | ≥ 0.70 |
+| Formation in possession | 0.92 | ≥ 0.85 |
+| Block type | 0.76 | ≥ 0.65 |
+
+Run `python -m whyitmatters.eval --seeds 20 --check` to reproduce.
+
+## Trust
+
+| Measure | Definition | Test |
+| --- | --- | --- |
+| Truth Score | claims that matched the match state / all claims generated, across all drafts | `tests/test_agents.py::test_end_to_end_truth_and_budget` |
+| On-air accuracy | every claim that aired, re-checked against the final match state | `tests/test_agents.py::test_a_generator_that_always_lies_never_reaches_air` |
+| Unsupported number | any number in a text that no claim accounts for, formatted for the viewer's language | `tests/test_agents.py::test_verifier_rejects_an_invented_number` |

@@ -51,7 +51,7 @@ def test_realistic_volumes(seed):
     passes = [e for e in m.events if e.type == EventType.PASS]
     shots = [e for e in m.events if e.type == EventType.SHOT]
     completion = sum(e.outcome == Outcome.COMPLETE for e in passes) / len(passes)
-    assert 900 <= len(passes) <= 1300
+    assert 780 <= len(passes) <= 1100  # calibrated to ~893 per match (docs/DATA.md)
     assert 12 <= len(shots) <= 40
     assert 0.70 <= completion <= 0.90
 

@@ -32,7 +32,7 @@ The simulator plants known answers (who controls the game, when it turns to chao
 
 | Held-out matches | Shift recall | Shift precision | Timeline accuracy | Detection lag |
 | --- | --- | --- | --- | --- |
-| 20 | 0.90 | 0.69 | 0.84 | 5.7 min |
+| 20 | 0.87 | 0.67 | 0.82 | 5.4 min |
 
 CI fails if any of these drop below target.
 
@@ -41,12 +41,17 @@ The agent team is scored on seeds 0–19 (offline template generator):
 | Measure | Result |
 | --- | --- |
 | Truth Score (claims passing the Verifier) | 1.00 |
-| Truth Score with a model that mis-states 30 % of first drafts | 0.92 raw; first-draft accuracy 0.65; every retry recovers; on-air accuracy 1.00 |
-| Cues per match | 18.2 (15–22); goals always air |
+| Truth Score with a model that mis-states 30 % of first drafts | 0.92 raw; first-draft accuracy 0.67; every retry recovers; on-air accuracy 1.00 |
+| Cues per match | 18.4 (14–24); goals always air |
 | Insights per match | 18.6: 6.6 control/chaos shifts, 2.3 goals, 2.0 press surges, 1.4 dangerous turnovers, 0.7 going long, 0.6 midfield battles, 1.4 hardest passes, 0.8 fastest shots, plus chances, top speed, passing milestones |
-| Formation detection vs scripted shape (held-out, 1,876 windows) | out of possession 0.75, in possession 0.93; block type (high / mid / low) 0.73 |
-| Driver attribution: a pressing metric is among the top drivers of a correctly detected control shift | 72 % (46/64) on tuning seeds 0–19; 86 % (63/73) on held-out seeds 1000–1019 |
-| Latency per insight | 2.2 ms mean, 18 ms max; a whole match runs in about 0.13 s |
+| Formation detection vs scripted shape (held-out, 1,868 windows) | out of possession 0.75, in possession 0.92; block type (high / mid / low) 0.76 |
+| Driver attribution: a pressing metric is among the top drivers of a correctly detected control shift | 71 % (45/63) on tuning seeds 0–19; 79 % (54/68) on held-out seeds 1000–1019 |
+| Latency per insight | 6.4 ms mean, 159 ms max (the Verifier replays the log, freeze frames included) |
+
+## Data and methods
+
+- [docs/DATA.md](docs/DATA.md): why the data is synthetic, the exact file format with real example lines, coordinates, ground truth, and a calibration table against public league averages (passes, long balls, goals, accurate passes all within 4 %).
+- [docs/METHODS.md](docs/METHODS.md): every metric with its formula, parameters, source, the test that pins it and how it is validated, plus "How we know it's right".
 
 ## Quick start
 

@@ -22,7 +22,7 @@ def distance_to_goal(x: float, y: float) -> float:
 
 
 def expected_goals(x: float, y: float, under_pressure: bool = False) -> float:
-    z = -1.4 + 1.6 * opening_angle(x, y) - 0.09 * distance_to_goal(x, y)
+    z = -1.25 + 1.6 * opening_angle(x, y) - 0.09 * distance_to_goal(x, y)
     xg = 1.0 / (1.0 + math.exp(-z))
     if under_pressure:
         xg *= 0.7

@@ -74,17 +74,17 @@ Detection is tuned on seeds 0–39 and scored on held-out seeds 1000+ (`python -
 
 | Measure | Target | Held-out result (20 matches) |
 | --- | --- | --- |
-| Phase-shift detection recall (±4 min, correct new state) | ≥ 0.75 | 0.90 |
-| Phase-shift detection precision (±4 min, correct new state) | ≥ 0.60 | 0.69 |
-| Timeline accuracy (state history with back-dated changes) | ≥ 0.75 | 0.84 |
+| Phase-shift detection recall (±4 min, correct new state) | ≥ 0.75 | 0.87 |
+| Phase-shift detection precision (±4 min, correct new state) | ≥ 0.60 | 0.67 |
+| Timeline accuracy (state history with back-dated changes) | ≥ 0.75 | 0.82 |
 | Live state accuracy (what the studio sees that minute) | reported | 0.56 |
-| Detection lag (true shift → confirmed) | reported | 5.7 min |
+| Detection lag (true shift → confirmed) | reported | 5.4 min |
 | Truth Score (claims passing the Verifier) | ≥ 0.95 after retries | 1.00 with the offline generator; 0.92 raw at 30 % injected faults, with on-air accuracy 1.00 after retries (seeds 0–19) |
-| Formation detection, out / in possession (5-min windows inside a scripted phase) | ≥ 0.70 / ≥ 0.85 | 0.75 / 0.93 |
-| Block type (high / mid / low) | ≥ 0.65 | 0.73 |
-| Driver attribution (a pressing metric among the top-3 drivers of a correct control shift) | ≥ 0.70 | 0.72 on seeds 0–19 (tuning), 0.86 on held-out seeds 1000–1019 |
-| Insight latency (event → cue) | < 2 s offline, < 6 s hosted model | 2.2 ms mean, 18 ms max per insight; whole match ≈ 0.13 s |
-| Realism per match | 900–1,300 passes, 12–40 shots, 70–90 % completion | ~1,090 passes, ~22 shots, ~80 %, ~2.1 goals |
+| Formation detection, out / in possession (5-min windows inside a scripted phase) | ≥ 0.70 / ≥ 0.85 | 0.75 / 0.92 |
+| Block type (high / mid / low) | ≥ 0.65 | 0.76 |
+| Driver attribution (a pressing metric among the top-3 drivers of a correct control shift) | ≥ 0.70 | 0.71 on seeds 0–19 (tuning), 0.79 on held-out seeds 1000–1019 |
+| Insight latency (event → cue) | < 2 s offline, < 6 s hosted model | 6.4 ms mean, 159 ms max per insight |
+| Realism per match | calibrated to public league averages (docs/DATA.md) | ~932 passes, ~94 long balls, ~2.7 goals, ~21 shots, 78 % completion |
 
 Known limitation: a shift is confirmed about 5–6 minutes after it starts, because a state needs a 5-minute window and 3 confirming minutes to avoid false alarms. Live claims therefore say "over the last five minutes", and the recap back-dates each shift to its estimated start.
 
