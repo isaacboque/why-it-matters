@@ -87,6 +87,7 @@ az group delete --name rg-whyitmatters --yes
 | Message | What to do |
 | --- | --- |
 | `The subscription is not registered to use namespace` | Run the script again; registration can take a few minutes the first time. |
-| `MissingSubscriptionRegistration` or a quota error in West Europe | `export LOCATION=swedencentral` and run the script again. |
+| `RequestDisallowedByAzure ... region is currently not accepting new customers` | Some regions refuse new subscriptions. The script defaults to Sweden Central; try `export LOCATION=northeurope` and a fresh group name (`export RG=rg-wim-ne`), because a resource group cannot change region. |
+| `MissingSubscriptionRegistration` or a quota error | Try another region as in the row above. |
 | The page loads but no match starts | Open `<url>/health`. If it does not answer, run `az containerapp logs show -n whyitmatters -g rg-whyitmatters --follow` and look at the last lines. |
 | Captions stay in English for other languages | The model is not on: check the three `AZURE_OPENAI_*` values and re-run the script. |

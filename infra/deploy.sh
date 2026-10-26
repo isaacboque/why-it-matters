@@ -12,7 +12,7 @@ set -euo pipefail
 
 APP="${APP:-whyitmatters}"
 RG="${RG:-rg-whyitmatters}"
-LOCATION="${LOCATION:-westeurope}"
+LOCATION="${LOCATION:-swedencentral}"
 cd "$(dirname "$0")/.."
 
 say() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
