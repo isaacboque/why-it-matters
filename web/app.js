@@ -545,6 +545,9 @@ function renderTrust() {
   $("badge").querySelector(".dot").style.background = tr.truth_score >= 0.95 ? "var(--ok)" : tr.truth_score >= 0.85 ? "var(--away)" : "var(--bad)";
   const drafts = S.verdicts.length, rejected = S.verdicts.filter((v) => !v.ok).length;
   const step = (who, n, d, bad = false) => `<li><div class="who">${esc(who)}</div><div class="n ${bad ? "bad" : ""}">${esc(n)}</div><div class="d">${esc(d)}</div></li>`;
+  $("flow-engine").textContent = tr.engine === "agent_framework"
+    ? "Live counts for this match · runs as a Microsoft Agent Framework workflow"
+    : "Live counts for this match";
   $("flow").innerHTML = [
     step("Match Pulse", S.pulses.length, `minutes read · ${S.transitions.length} changes of control confirmed`),
     step("Analyst", tr.insights, "moments worth explaining (shifts, tactics, chances, records)"),

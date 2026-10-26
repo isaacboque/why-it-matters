@@ -9,6 +9,7 @@ the studio and what the trust panel counts.
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 
@@ -36,6 +37,7 @@ class Orchestrator:
         fault_rate: float = 0.0,
         seed: int = 0,
         budget: int = 3,
+        engine: str | None = None,
     ):
         gen = generator or TemplateGenerator()
         if hasattr(gen, "bind"):
@@ -54,6 +56,14 @@ class Orchestrator:
         self.cues: list[Cue] = []
         self.recap: Recap | None = None
         self.latencies_ms: list[float] = []
+        # "inline" (default) or "agent_framework": the explain/verify/publish loop as a Microsoft
+        # Agent Framework workflow. Same agents, same results; WIM_ENGINE picks it in the API.
+        engine = engine or os.environ.get("WIM_ENGINE", "inline")
+        self.workflow = None
+        if engine == "agent_framework":
+            from whyitmatters.agents.workflow import InsightWorkflow
+
+            self.workflow = InsightWorkflow(self)
 
     def _match_so_far(self, minute: int) -> dict[str, dict]:
         w = self.state.pulse.counter.window(minute, minute + 1)
@@ -133,6 +143,7 @@ class Orchestrator:
             "claims_rejected": self.stats.claims_generated - self.stats.claims_verified,
             "insights": len(self.insights),
             "cues": len(self.cues),
+            "engine": "agent_framework" if self.workflow is not None else "inline",
             "latency_ms_mean": round(sum(lat) / len(lat), 3) if lat else 0.0,
             "latency_ms_p95": round(p95, 3),
             "written_by_model": sum(i.slots.get("written_by") == "model" for i in self.insights),
@@ -197,59 +208,74 @@ class Orchestrator:
         self.stats.claims_verified += sum(c.ok for c in checks)
 
     def _explain(self, cand) -> None:
+        """Draft -> verify -> retry or publish. The same loop runs as a Microsoft Agent Framework
+        workflow when `engine="agent_framework"` (agents/workflow.py)."""
+        if self.workflow is not None:
+            self.workflow.explain(cand)
+            return
         started = time.perf_counter()
         verdict = None
         for attempt in range(1, MAX_ATTEMPTS + 1):
             draft = self.explainer.run(self.state, cand, attempt, verdict)
             verdict = self.verifier.run(self.state, draft)
-            self._count(verdict.checks)
-            if attempt == 1:
-                self.stats.first_drafts += 1
-                self.stats.first_drafts_ok += verdict.ok
-            else:
-                self.stats.retries += 1
-            self._emit(
-                "verdict",
-                cand.t,
-                {
-                    "candidate_id": cand.id,
-                    "kind": cand.kind,
-                    "attempt": attempt,
-                    "ok": verdict.ok,
-                    "headline": draft.headline,
-                    "failures": [c.reason for c in verdict.failures],
-                    "unsupported_numbers": verdict.unsupported_numbers,
-                    "unsupported_names": verdict.unsupported_names,
-                },
-            )
+            self.on_verdict(cand, attempt, draft, verdict)
             if verdict.ok:
-                latency = (time.perf_counter() - started) * 1000
-                self.latencies_ms.append(latency)
-                insight = Insight(
-                    id=cand.id,
-                    kind=cand.kind,
-                    minute=cand.minute,
-                    t=cand.t,
-                    significance=cand.significance,
-                    side=cand.side,
-                    player_id=cand.player_id,
-                    headline=draft.headline,
-                    body=draft.body,
-                    claims=draft.claims,
-                    slots=draft.slots,
-                    evidence=cand.evidence,
-                    attempts=attempt,
-                    latency_ms=round(latency, 3),
-                    tags=[t for t in draft.slots.get("tags", "").split(",") if t],
-                )
-                self.insights.append(insight)
-                self._emit("insight", cand.t, insight)
-                cue = self.producer.run(insight)
-                if cue is not None:
-                    self.cues.append(cue)
-                    self._emit("cue", cue.t_in, cue)
-                self._emit("trust", cand.t, self.trust())
+                self.publish(cand, draft, attempt, started)
                 return
+        self.drop(cand)
+
+    def on_verdict(self, cand, attempt: int, draft, verdict) -> None:
+        self._count(verdict.checks)
+        if attempt == 1:
+            self.stats.first_drafts += 1
+            self.stats.first_drafts_ok += verdict.ok
+        else:
+            self.stats.retries += 1
+        self._emit(
+            "verdict",
+            cand.t,
+            {
+                "candidate_id": cand.id,
+                "kind": cand.kind,
+                "attempt": attempt,
+                "ok": verdict.ok,
+                "headline": draft.headline,
+                "failures": [c.reason for c in verdict.failures],
+                "unsupported_numbers": verdict.unsupported_numbers,
+                "unsupported_names": verdict.unsupported_names,
+            },
+        )
+
+    def publish(self, cand, draft, attempt: int, started: float) -> Insight:
+        latency = (time.perf_counter() - started) * 1000
+        self.latencies_ms.append(latency)
+        insight = Insight(
+            id=cand.id,
+            kind=cand.kind,
+            minute=cand.minute,
+            t=cand.t,
+            significance=cand.significance,
+            side=cand.side,
+            player_id=cand.player_id,
+            headline=draft.headline,
+            body=draft.body,
+            claims=draft.claims,
+            slots=draft.slots,
+            evidence=cand.evidence,
+            attempts=attempt,
+            latency_ms=round(latency, 3),
+            tags=[t for t in draft.slots.get("tags", "").split(",") if t],
+        )
+        self.insights.append(insight)
+        self._emit("insight", cand.t, insight)
+        cue = self.producer.run(insight)
+        if cue is not None:
+            self.cues.append(cue)
+            self._emit("cue", cue.t_in, cue)
+        self._emit("trust", cand.t, self.trust())
+        return insight
+
+    def drop(self, cand) -> None:
         self.stats.dropped += 1
         self._emit("dropped", cand.t, {"candidate_id": cand.id, "kind": cand.kind})
         self._emit("trust", cand.t, self.trust())

@@ -54,6 +54,27 @@ The agent team is scored on seeds 0–19 (offline template generator):
 | Driver attribution: a pressing metric is among the top drivers of a correctly detected control shift | 71 % (45/63) on tuning seeds 0–19; 79 % (54/68) on held-out seeds 1000–1019 |
 | Latency per insight | 12.5 ms mean, 55 ms max (the Verifier replays the log, freeze frames included) |
 
+## How the agents work together
+
+```mermaid
+flowchart LR
+  E[Synthetic events<br/>+ freeze frames] --> P[Match Pulse<br/>state, shape, xT]
+  P --> A[Analyst<br/>what is worth explaining]
+  A --> X[Explainer<br/>draft with typed claims]
+  X --> V{Verifier<br/>recompute every number<br/>from the raw log}
+  V -- ok --> R[Producer<br/>on-air budget]
+  V -- rejected --> X
+  V -- rejected 3x --> D[Drop]
+  R --> Z[Personalizer<br/>fan / player / analyst / coach,<br/>any language, re-verified]
+  B[(Blackboard: shared match state)] -.- A & X & V & R & Z
+```
+
+- **Shared state:** every agent reads the same Blackboard: match state, rolling windows and the raw event log. The Verifier recomputes from the raw log, not from what the writer saw.
+- **Typed handoffs:** each number travels as a `Claim` (metric, value, window or event, tolerance), so the text can't say anything the data doesn't back.
+- **Microsoft Agent Framework:** the draft → verify → retry/publish loop runs as an Agent Framework workflow (`agents/workflow.py`). Each agent is an `Executor`, and conditional edges route each draft on the Verifier's verdict. Switch it on with `WIM_ENGINE=agent_framework`, the default in the container. A test proves it gives identical results to the inline loop.
+- **Microsoft Foundry:** a model deployed in Foundry can write the captions in any language, under the same checks ([docs/LLM.md](docs/LLM.md)).
+- **Azure Container Apps:** the app is hosted there with one command from Cloud Shell ([docs/DEPLOY.md](docs/DEPLOY.md)).
+
 ## Data and methods
 
 - [docs/DATA.md](docs/DATA.md): why the data is synthetic, the exact file format with real example lines, coordinates, ground truth, and a calibration table against public league averages (passes, long balls, goals, accurate passes all within 4 %).
@@ -76,11 +97,25 @@ pytest
 pip install -e ".[api]" && uvicorn whyitmatters.api:app --port 8000   # then open http://localhost:8000
 ```
 
-or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`.
+or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`. To put it on Azure, see [docs/DEPLOY.md](docs/DEPLOY.md) (one script, run from Azure Cloud Shell).
 
-- **Studio** — pitch with recent events, Match Pulse chart (dominance and chaos), the cue rail with a **Why?** drawer showing evidence and the Verifier's verdict.
-- **Fan** — plain-language cues in EN / ES / CA, favourite club and player, player-focus mode.
-- **Trust** — live Truth Score, rejected claims, retries, latency and detection precision/recall. Tick *Unreliable model* to watch the Verifier catch mis-stated numbers.
+- **Match centre:**
+  - scorebug
+  - pitch layers: live positions of all 22 players, average shape, threat map, passes that hurt, shots
+  - xT momentum
+  - head-to-head
+  - on-air rail with **Show the proof**
+- **Broadcast:** the on-air cue as a 16:9 lower third over the live picture; key-colour background and full screen.
+- **Players:** stand-outs and a sortable per-player table (xT added, line breaks, opponents bypassed, xG and more).
+- **Fan:** plain-language cues in EN / ES / CA (any language with the model on), favourite club and player, player-focus and coach modes, "My metric".
+- **Trust:**
+  - live counts for each agent
+  - Truth Score
+  - held-out benchmarks
+  - a claims ledger (every number on air, stated against recomputed)
+  - rejected drafts
+
+  Tick *Unreliable model* to watch the Verifier catch wrong numbers.
 - API docs at `/docs`; overlay cues for a graphics partner at `GET /matches/{seed}/cues`; live feed at `GET /matches/{seed}/stream` (Server-Sent Events, a 90-minute match in ~3 minutes, `?duration=0` for instant).
 
 ### Model-written text in any language (optional)
