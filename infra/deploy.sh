@@ -49,7 +49,7 @@ az containerapp up \
   "${SOURCE_ARGS[@]}" \
   --ingress external \
   --target-port 8000 \
-  --env-vars WIM_ENGINE=agent_framework WIM_WARM_SEEDS=60,32,51,156,173,194,409,487
+  --env-vars WIM_ENGINE=agent_framework WIM_WARM_SEEDS=391,193,51,63,144,194,487,353
 
 say "Keeping one replica warm so judges never hit a cold start"
 # a new revision suffix on every run makes Azure pull the current :latest again

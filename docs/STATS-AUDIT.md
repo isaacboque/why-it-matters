@@ -22,6 +22,7 @@ Every number the UI and the API show was recomputed from the raw event log by a 
 | Player cards and rating | `GET /matches/{seed}/players` | per-player counts, key passes and xA, distance, top speed and sprints rebuilt from the log; the rating recomputed from the stated weights; per-player sprints sum to the team's, key passes to the team's assisted shots | New. Consistent (rating within 0.1 of the independent value, the slack for per-pass xT rounding) | `test_player_cards_match_the_independent_recount_and_sum_to_the_team` |
 | New insight kinds (`block_drop`, `hub_player`, `press_escape`, `physical_drop`) | cues, Why? drawer | every claim of every insight equals the independent value, `player_involvement` included (all 40 matches) | Consistent | `test_every_verifier_claim_equals_independent_value` |
 | Shots per team | head-to-head, scorebug | Premier League reference below | **Discrepancy.** 10.4 against 12.5-13.8 (-17 to -24 %); shots on target 4.6 per team were right in absolute terms but 44 % of shots, against about 34 % in the league. → Recalibrated: shot rate ×1.35, xG per shot ×0.86, saves 35 % → 25 % of non-goal shots. Shots 13.2, on target 4.5 | `test_match_distribution_is_premier_league_like[shots_per_team, sot_per_team]` |
+| Goals per match, team xG, xG per shot, share of team-matches above 3.0 xG, goals / xG | scorebug, head-to-head, recap, featured picker | totals from the log against the Premier League references in `docs/DATA.md` | **Discrepancy.** Goals 3.42 (seeds 0-99), team xG 1.63, xG per shot 0.125, 5.5 % of team-matches above 3.0 xG, max 4.66. → `XG_SCALE` 0.86 → 0.90 and angle weight 1.6 → 1.3 in `simulator/xg.py`: goals 3.17 (seeds 100-299: 2.78), team xG 1.49, xG per shot 0.115, 2.0 % above 3.0 (3.5 % on 100-299), goals / xG 1.06 (table in `docs/DATA.md`) | `test_xg_calibration_league_like`, `test_featuring_penalises_implausible_matches` |
 
 ## Realism of the match distribution
 
@@ -29,7 +30,7 @@ Reference: all 380 matches of each of 2023-24, 2024-25 and 2025-26 in the [footb
 
 | Per match | Reference (3 seasons) | Simulator before | Simulator after |
 | --- | --- | --- | --- |
-| Goals | 2.75 - 3.28 | 2.73 | 2.92 |
+| Goals | 2.75 - 3.28 | 2.73 | 2.92 (then 3.17 after the xG calibration) |
 | Share of 0-0 | 2.9 - 7.1 % | 3 % | 4 % |
 | Share of 6+ goals | 4.2 - 9.5 % | 6 % | 4 % |
 | Home win / draw / away win | 41-46 % / 22-27 % / 30-35 % | 48 / 23 / 29 % | 47 / 17 / 36 % |

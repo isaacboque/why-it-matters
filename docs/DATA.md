@@ -81,7 +81,7 @@ The simulator's averages over seeds 0-99, compared with public Premier League fi
 | --- | --- | --- | --- | --- |
 | Passes, both teams | 913.7 | 893.4 (2024-25) | +2 % | [Opta Analyst](https://theanalyst.com/articles/premier-league-teams-still-more-direct-2025-26) |
 | Long balls ≥ 32 m, both teams | 97.5 | 93.4 (2024-25) | +4 % | same article |
-| Goals | 3.42 | 2.75 to 3.28 (2023-26, all 1,140 matches; 2.80 over the first 210 of 2025-26) | +0.14 above range on these 100 seeds (seeds 100-299: 2.95; standard error of 100 matches about 0.17) | same article |
+| Goals | 3.17 | 2.75 to 3.28 (2023-26, all 1,140 matches; 2.80 over the first 210 of 2025-26) | within range over 300 seeds (2.91; seeds 100-299: 2.78; standard error of 100 matches about 0.17) | same article |
 | Accurate passes per team | 357.6 | ≈ 360.5 (2025-26; derived: mean of the 20 teams) | −1 % | [playerstats.football](https://playerstats.football/premier-league/stats/accurate-passes/previous) |
 | Shots per team | 13.0 | 12.5 to 13.8 (2023-26) | within range | [football-data.co.uk](https://www.football-data.co.uk/englandm.php) |
 | Shots on target per team | 4.5 | 4.2 to 4.9 (2023-26) | within range | same |
@@ -99,3 +99,19 @@ python -c "import statistics as s; from whyitmatters.simulator import simulate; 
 ### Club identities (better seeds)
 
 Each of the eight fictional clubs has a persistent identity (`simulator/teams.py::CLUB_IDENTITY`: possession, direct, high-press or low-block, with a quality offset and pressing, tempo, directness, block-height and attack multipliers). A side that leads late drops its block and slows down; a trailing side presses and goes direct (`simulator/phases.py::game_state`). The multipliers average close to 1 across the league, so the table above barely moved, and it was re-measured after the change. Goals over seeds 0-99 went from 2.92 to 3.42. That is mostly the sampling of this particular set: 100 matches have a standard error of about 0.17, and seeds 100-299 give 2.95. It is above the reference range but inside the band `tests/test_stats_audit.py` allows. Detection on `eval --seeds 20` moved from precision 0.66 / recall 0.91 / timeline 0.82 to 0.61 / 0.84 / 0.81 (every target still met), because each club now deviates from the scripted phase styles by its own identity. `tests/test_seeds.py` pins that identities differ and that the scoreline distribution stays in the audit ranges. The featured matches (`featured.json`) are chosen by `python -m whyitmatters.simulator.featured --seeds 0-499`.
+
+### Goals and xG calibration (fix/xg-calibration)
+
+Cowork found goals at 3.5 per match, team xG 1.63 (league about 1.4 to 1.5) and a 4.22 xG team-match on screen. The cause was the per-shot value: `xg.XG_SCALE` 0.86 and an opening-angle weight of 1.6 made close-range chances too valuable. Now `XG_SCALE` = 0.90 and the angle weight = 1.3 (a flatter curve: close chances are worth less, mid-range ones slightly more); the shot rate is untouched (shots per team stay at about 13). Goals follow xG because a shot scores with probability equal to its xG. The detection metrics moved by noise only (`eval --seeds 20`: precision 0.61 → 0.60, recall 0.84 → 0.82, timeline 0.81 → 0.80, every target still met). Measured on seeds 0-99 / 100-299 (before → after):
+
+| Per team-match | Before | After | Reference |
+| --- | --- | --- | --- |
+| Goals per match | 3.42 / 2.95 | 3.17 / 2.78 | 2.75 to 3.28 |
+| Team xG, mean | 1.63 / 1.54 | 1.49 / 1.46 | about 1.4 to 1.5 |
+| xG per shot | 0.125 / 0.117 | 0.115 / 0.111 | 0.10 to 0.12 |
+| Team-matches above 3.0 xG | 5.5 % / 5.0 % | 2.0 % / 3.5 % | at most about 2 % |
+| Shots per team | 13.0 / 13.2 | 12.9 / 13.2 | 12.5 to 13.8 |
+| Goals / xG | 1.05 / 0.96 | 1.06 / 0.95 | about 1 |
+| Big chances (xG ≥ 0.3) per team | 1.51 / 1.31 | 1.21 / 1.14 | n/a |
+
+The share above 3.0 xG is at the 2 % target on seeds 0-99 and over it on 100-299 (3.0 % over all 300): it is the natural tail of shot-count variance (a 17 to 23 shot team-match), and the featured-match score now penalises any team-match above 3.0 xG or any 6+ goal game. The xT grid was not refitted: a refit would move its maximum from 0.148 to 0.136 (about 8 %), inside what the insight thresholds tolerate.

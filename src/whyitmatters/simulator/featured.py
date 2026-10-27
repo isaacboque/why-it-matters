@@ -27,6 +27,9 @@ OUT = Path(__file__).with_name("featured.json")
 COUNT = 8
 SHORTLIST = 40
 FAULTS = 0.3
+MAX_TEAM_XG = 3.0  # a team-match above this xG, or this many goals, is implausible
+MAX_GOALS = 6
+IMPLAUSIBLE_PENALTY = 10.0  # larger than any story score, so such seeds fall out of the shortlist
 
 # Tag order = priority when a match has several; the title follows the first tag it has.
 TITLES = {
@@ -96,6 +99,13 @@ def story_score(m: Match) -> tuple[float, list[str]]:
     if big >= 4:
         score += 0.25 * min(big, 8)
         tags.append("chance-fest")
+    # never feature an implausible match: a team-match above 3.0 xG or a 6+ goal game
+    xg = {"home": 0.0, "away": 0.0}
+    for e in m.events:
+        if e.type == "shot" and e.xg:
+            xg[e.side] += e.xg
+    if max(xg.values()) > MAX_TEAM_XG or n >= MAX_GOALS:
+        score -= IMPLAUSIBLE_PENALTY
     return score, tags
 
 
