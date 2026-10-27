@@ -396,3 +396,8 @@ dialog#recap .inner { max-height: min(60vh, 560px); }
   dialog#recap .inner { max-height: 55vh; padding-bottom: 28px; }
   dialog#recap .close { min-height: 40px; }
 }
+
+/* ---------------------------------------------------------------- featured picker */
+.controls #featured { max-width: 17rem; }
+.controls #random { min-height: 38px; }
+[hidden] { display: none !important; }

@@ -41,7 +41,7 @@ EVAL_SEEDS = 20
 FOCUS_PLAYERS = 3
 LANGS: tuple[str, ...] = TEMPLATE_LANGS
 MODES: tuple[str, ...] = tuple(m for m in get_args(Mode) if m != "player_focus")
-FAULTS_FOR = 2  # seeds (in order) that also get an unreliable-model recording
+FAULTS_FOR = 1  # seeds (in order) that also get an unreliable-model recording
 SIZE_BUDGET = 15_000_000  # Analytics v2: shape and xT in every pulse
 
 Writer = Callable[[Path, Any], None]
@@ -125,7 +125,11 @@ def export_demo(
         "files": sorted([*files, "data/index.json"]),
     }
     (data / "index.json").write_text(json.dumps(manifest, separators=(",", ":")), encoding="utf-8")
-    manifest["bytes"] = sum(p.stat().st_size for p in out.rglob("*") if p.is_file())
+    # what the demo actually serves: the manifest's files plus the web app (older seeds left
+    # in `out` by an earlier export are not loaded by this manifest, so they do not count)
+    served = [out / f for f in manifest["files"]]
+    served += [out / p.name for p in web_dir.iterdir() if p.is_file()]
+    manifest["bytes"] = sum(p.stat().st_size for p in served if p.is_file())
     return manifest
 
 
