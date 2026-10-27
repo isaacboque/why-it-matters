@@ -132,17 +132,35 @@ class OpenAIChat:
 
     def __init__(self, client: Any, model: str, timeout_s: float = DEFAULT_TIMEOUT_S):
         self._client, self._model, self._timeout = client, model, timeout_s
+        # GPT-5 / o-series reasoning models only accept the default temperature; once the
+        # service says so we stop sending it for this deployment.
+        self._send_temperature = True
 
     def complete(self, system: str, user: str) -> str:
-        reply = self._client.chat.completions.create(
-            model=self._model,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.2,
-            max_tokens=500,
-            response_format={"type": "json_object"},
-            timeout=self._timeout,
-        )
+        args: dict[str, Any] = {
+            "model": self._model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "max_completion_tokens": 500,
+            "response_format": {"type": "json_object"},
+            "timeout": self._timeout,
+        }
+        if self._send_temperature:
+            args["temperature"] = 0.2
+        try:
+            reply = self._client.chat.completions.create(**args)
+        except Exception as exc:
+            if not (self._send_temperature and _rejects_temperature(exc)):
+                raise
+            self._send_temperature = False
+            del args["temperature"]
+            reply = self._client.chat.completions.create(**args)
         return reply.choices[0].message.content or ""
+
+
+def _rejects_temperature(exc: Exception) -> bool:
+    """True when the API refused the request because `temperature` is not supported."""
+    text = str(exc).lower()
+    return "temperature" in text and ("unsupported" in text or "not support" in text)
 
 
 class LLMGenerator:

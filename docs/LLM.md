@@ -27,7 +27,7 @@ The first line printed says which writer is on (`writer: llm via azure openai / 
 | --- | --- | --- |
 | `WIM_GENERATOR` | `template` or `llm` | `template` |
 | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_KEY` | Azure OpenAI / Foundry (all three needed) | – |
-| `AZURE_OPENAI_API_VERSION` | API version | `2024-10-21` |
+| `AZURE_OPENAI_API_VERSION` | API version (`2024-10-21` or later) | `2024-10-21` |
 | `GITHUB_TOKEN` | GitHub Models fallback | – |
 | `GITHUB_MODELS_ENDPOINT` | its OpenAI-compatible endpoint | `https://models.github.ai/inference` |
 | `WIM_LLM_MODEL` | model id for GitHub Models | `openai/gpt-4o-mini` |
@@ -35,6 +35,8 @@ The first line printed says which writer is on (`writer: llm via azure openai / 
 | `WIM_LLM_TIMEOUT_S` | per-request timeout | `20` |
 
 Keys are only ever read from the environment; nothing in the repository holds one.
+
+Recommended Azure deployment: `gpt-4.1-mini`; `gpt-5-mini` is supported too. Requests use `max_completion_tokens` (accepted by both). GPT-5 and o-series models only take the default temperature: if the service rejects `temperature`, the client retries once without it and stops sending it for that deployment.
 
 ## What the model is told
 
