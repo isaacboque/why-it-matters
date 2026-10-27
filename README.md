@@ -8,9 +8,11 @@
 
 | Link | |
 | --- | --- |
-| Live demo (Azure Container Apps) | LIVE_DEMO_URL |
-| Static demo (no backend) | STATIC_DEMO_URL |
+| Live demo (Azure Container Apps) | https://whyitmatters.nicerock-0b92f5eb.swedencentral.azurecontainerapps.io |
+| Static fallback | `python -m http.server -d dist/demo` (no backend) |
 | Demo video | VIDEO_URL |
+
+Best first click: `?seed=391&pace=45&faults=1`: https://whyitmatters.nicerock-0b92f5eb.swedencentral.azurecontainerapps.io/?seed=391&pace=45&faults=1
 
 1. Open the demo, leave Pace on **Live** (or pick **Fast**) and press **Kick off**. Match centre fills with the pitch, xT momentum and the on-air rail.
 2. On any card in the on-air rail, press **Show the proof**: the number stated next to the number recomputed from the raw event log.
