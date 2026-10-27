@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>WhyItMatters</title>
+  <title>WhyItMatters: football moments, verified before air</title>
+  <meta name="description" content="Multi-agent match commentary where every number is recomputed from the raw events before it goes on air. Synthetic data only.">
+  <meta name="theme-color" content="#37003c">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2337003c'/%3E%3Cpath d='M8 9l4 14 4-9 4 9 4-14' fill='none' stroke='%2300ff85' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@600;700;800&display=swap">
@@ -42,48 +45,44 @@
     <section id="view-studio" class="view active" role="tabpanel" aria-labelledby="tab-studio">
       <div class="scorebug" id="scoreboard-studio"></div>
       <div class="mc-grid">
-        <div class="mc-main">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Pitch</h2>
-              <div class="seg" id="layers" aria-label="What the pitch shows">
-                <button data-layer="live" aria-pressed="true">Live</button>
-                <button data-layer="shape" aria-pressed="false">Shape</button>
-                <button data-layer="threat" aria-pressed="false">Threat map</button>
-                <button data-layer="passes" aria-pressed="false">Passes that hurt</button>
-                <button data-layer="shots" aria-pressed="false">Shots</button>
-              </div>
-              <div class="seg" id="layer-team" aria-label="Which team" hidden>
-                <button data-team="home" aria-pressed="true">Home</button>
-                <button data-team="away" aria-pressed="false">Away</button>
-              </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Pitch</h2>
+            <div class="seg" id="layers" aria-label="What the pitch shows">
+              <button data-layer="live" aria-pressed="true">Live</button>
+              <button data-layer="shape" aria-pressed="false">Shape</button>
+              <button data-layer="threat" aria-pressed="false">Threat map</button>
+              <button data-layer="passes" aria-pressed="false">Passes that hurt</button>
+              <button data-layer="shots" aria-pressed="false">Shots</button>
             </div>
-            <canvas id="pitch" aria-label="The pitch, with the selected layer"></canvas>
-            <p class="caption" id="pitch-caption"></p>
-            <div class="legend" id="pitch-legend"></div>
+            <div class="seg" id="layer-team" aria-label="Which team" hidden>
+              <button data-team="home" aria-pressed="true">Home</button>
+              <button data-team="away" aria-pressed="false">Away</button>
+            </div>
           </div>
-          <div class="panel">
-            <div class="panel-head"><h2>Momentum</h2><span class="hint">Threat each team created, minute by minute</span></div>
-            <canvas id="pulse" aria-label="Expected threat per minute and who controls the game"></canvas>
-            <div class="legend" id="pulse-legend"></div>
-          </div>
+          <canvas id="pitch" aria-label="The pitch, with the selected layer"></canvas>
+          <p class="caption" id="pitch-caption"></p>
+          <div class="legend" id="pitch-legend"></div>
         </div>
-        <aside class="mc-side">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Head to head</h2>
-              <div class="seg" id="h2h-scope" aria-label="Period">
-                <button data-scope="window" aria-pressed="true">Last 5 min</button>
-                <button data-scope="match" aria-pressed="false">Match</button>
-              </div>
+        <div class="panel onair">
+          <div class="panel-head"><h2>On air</h2><span class="hint">Every number checked before it shows</span></div>
+          <div class="rail" id="rail" aria-live="polite"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Momentum</h2><span class="hint">Threat each team created, minute by minute</span></div>
+          <canvas id="pulse" aria-label="Expected threat per minute and who controls the game"></canvas>
+          <div class="legend" id="pulse-legend"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Head to head</h2>
+            <div class="seg" id="h2h-scope" aria-label="Period">
+              <button data-scope="window" aria-pressed="true">Last 5 min</button>
+              <button data-scope="match" aria-pressed="false">Match</button>
             </div>
-            <div class="h2h" id="h2h"></div>
           </div>
-          <div class="panel">
-            <div class="panel-head"><h2>On air</h2><span class="hint">Every number checked before it shows</span></div>
-            <div class="rail" id="rail" aria-live="polite"></div>
-          </div>
-        </aside>
+          <div class="h2h" id="h2h"></div>
+        </div>
       </div>
     </section>
 
