@@ -36,7 +36,7 @@ The simulator plants known answers (who controls the game, when it turns to chao
 
 | Held-out matches | Shift recall | Shift precision | Timeline accuracy | Detection lag |
 | --- | --- | --- | --- | --- |
-| 20 | 0.87 | 0.67 | 0.82 | 5.4 min |
+| 20 | 0.91 | 0.66 | 0.82 | 5.5 min |
 
 CI fails if any of these drop below target.
 
@@ -77,7 +77,8 @@ flowchart LR
 
 ## Data and methods
 
-- [docs/DATA.md](docs/DATA.md): why the data is synthetic, the exact file format with real example lines, coordinates, ground truth, and a calibration table against public league averages (passes, long balls, goals, accurate passes all within 4 %).
+- [docs/DATA.md](docs/DATA.md): why the data is synthetic, the exact file format with real example lines, coordinates, ground truth, and a calibration table against public league averages (passes, long balls, goals, accurate passes, shots all within 5 %).
+- [docs/STATS-AUDIT.md](docs/STATS-AUDIT.md): every number on screen recomputed from the raw event log by an independent checker (score, clock, possession, xG, xT, duels, shape, players, every Verifier claim), plus the match distribution against three Premier League seasons.
 - [docs/METHODS.md](docs/METHODS.md): every metric with its formula, parameters, source, the test that pins it and how it is validated, plus "How we know it's right".
 
 ## Quick start

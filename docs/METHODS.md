@@ -1,6 +1,6 @@
 # Methods sheet
 
-Every number WhyItMatters puts on screen comes from one of the methods below. For each one this sheet gives the formula, our parameters, where the definition comes from, the test that pins it down and how it is validated. Data format and calibration are in [DATA.md](DATA.md).
+Every number WhyItMatters puts on screen comes from one of the methods below. For each one this sheet gives the formula, our parameters, where the definition comes from, the test that pins it down and how it is validated. Data format and calibration are in [DATA.md](DATA.md); the independent recomputation of every displayed number is in [STATS-AUDIT.md](STATS-AUDIT.md).
 
 ## How we know it's right
 

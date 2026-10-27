@@ -79,15 +79,16 @@ The simulator's averages over seeds 0-99, compared with public Premier League fi
 
 | Per match | Simulator (seeds 0-99) | Reference | Gap | Source |
 | --- | --- | --- | --- | --- |
-| Passes, both teams | 931.5 | 893.4 (2024-25) | +4 % | [Opta Analyst](https://theanalyst.com/articles/premier-league-teams-still-more-direct-2025-26) |
-| Long balls ≥ 32 m, both teams | 94.0 | 93.4 (2024-25) | +1 % | same article |
-| Goals | 2.73 | ≈ 2.80 (2025-26; derived: 587 goals in 210 games) | −3 % | same article |
-| Accurate passes per team | 364.8 | ≈ 360.5 (2025-26; derived: mean of the 20 teams) | +1 % | [playerstats.football](https://playerstats.football/premier-league/stats/accurate-passes/previous) |
-| Shots, both teams | 20.9 | not used: no source checked yet | — | — |
+| Passes, both teams | 907.7 | 893.4 (2024-25) | +2 % | [Opta Analyst](https://theanalyst.com/articles/premier-league-teams-still-more-direct-2025-26) |
+| Long balls ≥ 32 m, both teams | 94.4 | 93.4 (2024-25) | +1 % | same article |
+| Goals | 2.92 | 2.75 to 3.28 (2023-26, all 1,140 matches; 2.80 over the first 210 of 2025-26) | within range | same article |
+| Accurate passes per team | 355.6 | ≈ 360.5 (2025-26; derived: mean of the 20 teams) | −1 % | [playerstats.football](https://playerstats.football/premier-league/stats/accurate-passes/previous) |
+| Shots per team | 13.2 | 12.5 to 13.8 (2023-26) | within range | [football-data.co.uk](https://www.football-data.co.uk/englandm.php) |
+| Shots on target per team | 4.5 | 4.2 to 4.9 (2023-26) | within range | same |
 
 "Derived" means we computed the reference from the source's own numbers; the source does not state it as a single figure.
 
-The simulator was recalibrated to this table: more long balls in build-up, a slightly slower tempo and slightly better chance quality. After recalibrating, every evaluation was re-run and is still above its CI target; the current numbers are in the [README](../README.md#measured-not-claimed).
+The simulator was recalibrated to this table: more long balls in build-up, a slightly slower tempo and slightly better chance quality. The shot rate, xG per shot and shot outcomes were recalibrated again by the [stats audit](STATS-AUDIT.md), which also checks win/draw/loss, 0-0 and 6+ goal shares. After recalibrating, every evaluation was re-run and is still above its CI target; the current numbers are in the [README](../README.md#measured-not-claimed).
 
 Reproduce the table with:
 
