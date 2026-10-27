@@ -53,8 +53,48 @@ def test_line_breaking_needs_a_goalward_pass_past_a_line():
 
 def test_reception_between_the_lines():
     assert damage.between_lines(ev())  # 72 is between the midfield (65) and back line (80)
-    assert not damage.between_lines(ev(end_x=60))
-    assert not damage.between_lines(ev(end_x=85))
+    assert damage.reception_gaps(ev()) == ["mid_def"]
+    assert damage.reception_gaps(ev(end_x=60)) == ["fwd_mid"]  # between the front two and midfield
+    assert not damage.between_lines(ev(end_x=85))  # behind the back line
+    assert not damage.between_lines(ev(end_x=45))  # in front of the front two
+
+
+# Hand-built frames for the lateral-span rule (OPP: lines at 80 / 65 / 50; back and midfield
+# lines span y 10..58, the front two span y 27..41; all spans widen by 2 m).
+def test_pass_round_the_outside_of_the_back_four_does_not_break_it():
+    p = ev(x=70, y=3, end_x=88, end_y=3)
+    assert damage.lines_broken_roles(p) == []
+    assert damage.lines_broken(p) == 0
+
+
+def test_pass_through_the_gap_between_centre_backs_breaks_the_back_line():
+    assert damage.lines_broken_roles(ev(x=70, y=34, end_x=88, end_y=34)) == ["back"]
+
+
+def test_pass_through_the_midfield_line_breaks_the_midfield_line():
+    assert damage.lines_broken_roles(ev(x=55, y=34, end_x=70, end_y=34)) == ["midfield"]
+    assert damage.lines_broken_roles(ev()) == ["midfield", "forward"]
+
+
+def test_pass_round_the_outside_of_the_forward_line_does_not_break_it():
+    assert damage.lines_broken_roles(ev(x=40, y=5, end_x=55, end_y=5)) == []
+
+
+def test_reception_on_the_touchline_level_with_the_midfield_is_not_between_lines():
+    p = ev(x=40, y=1, end_x=65.5, end_y=1)
+    assert damage.reception_gaps(p) == []
+
+
+def test_reception_in_the_pocket_behind_the_midfield_is_mid_def():
+    assert damage.reception_gaps(ev(end_x=72, end_y=34)) == ["mid_def"]
+
+
+def test_reception_behind_the_forwards_in_front_of_the_midfield_is_fwd_mid():
+    assert damage.reception_gaps(ev(end_x=58, end_y=34)) == ["fwd_mid"]
+
+
+def test_reception_next_to_an_opponent_is_not_in_space():
+    assert damage.reception_gaps(ev(end_x=66, end_y=28)) == []  # 1.4 m from a midfielder
 
 
 def test_zone_entries_and_lanes():
