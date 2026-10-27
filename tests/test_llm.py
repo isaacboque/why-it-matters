@@ -432,3 +432,49 @@ def test_llm_mode_writes_through_the_api_and_reports_it():
     assert not any(c["translation_unavailable"] for c in body["cues"])
     cues = client.get(f"/matches/{SEED}/cues").json()
     assert cues["trust"]["written_by_model"] > 0 and cues["trust"]["written_by_fallback"] == 0
+
+
+class _FakeCompletions:
+    """Stands in for `client.chat.completions`; records the arguments of every call."""
+
+    def __init__(self, reject_temperature: bool):
+        self.reject_temperature = reject_temperature
+        self.calls: list[dict] = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.reject_temperature and "temperature" in kwargs:
+            raise ValueError(
+                "Unsupported value: 'temperature' does not support 0.2 with this model."
+            )
+        msg = types.SimpleNamespace(content="{}")
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=msg)])
+
+
+def _chat(reject_temperature: bool):
+    comps = _FakeCompletions(reject_temperature)
+    client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=comps))
+    return OpenAIChat(client, "gpt-test"), comps
+
+
+def test_chat_sends_max_completion_tokens_and_temperature_when_accepted():
+    chat, comps = _chat(reject_temperature=False)
+    chat.complete("s", "u")
+    chat.complete("s", "u")
+    assert all(c["max_completion_tokens"] == 500 and "max_tokens" not in c for c in comps.calls)
+    assert all(c["temperature"] == 0.2 for c in comps.calls)
+
+
+def test_chat_retries_once_without_temperature_and_remembers_it():
+    chat, comps = _chat(reject_temperature=True)
+    assert chat.complete("s", "u") == "{}"
+    assert len(comps.calls) == 2 and "temperature" not in comps.calls[1]
+    chat.complete("s", "u")
+    assert len(comps.calls) == 3 and "temperature" not in comps.calls[2]
+
+
+def test_chat_does_not_swallow_other_errors():
+    chat, comps = _chat(reject_temperature=False)
+    comps.create = lambda **kw: (_ for _ in ()).throw(TimeoutError("slow"))
+    with pytest.raises(TimeoutError):
+        chat.complete("s", "u")
