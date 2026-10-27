@@ -78,19 +78,21 @@ The agent team is scored on seeds 0–19 (offline template generator):
 ```mermaid
 flowchart LR
   E[Synthetic events<br/>+ freeze frames] --> P[Match Pulse<br/>state, shape, xT]
-  P --> A[Analyst<br/>what is worth explaining]
+  P --> A[TacticsWatcher<br/>what is worth explaining]
   A --> X[Explainer<br/>draft with typed claims]
   X --> V{Verifier<br/>recompute every number<br/>from the raw log}
   V -- ok --> R[Producer<br/>on-air budget]
   V -- rejected --> X
   V -- rejected 3x --> D[Drop]
+  D -- next candidate --> X
+  Z -- next candidate --> X
   R --> Z[Personalizer<br/>fan / player / analyst / coach,<br/>any language, re-verified]
   B[(Blackboard: shared match state)] -.- A & X & V & R & Z
 ```
 
 - **Shared state:** every agent reads the same Blackboard: match state, rolling windows and the raw event log. The Verifier recomputes from the raw log, not from what the writer saw.
 - **Typed handoffs:** each number travels as a `Claim` (metric, value, window or event, tolerance), so the text can't say anything the data doesn't back.
-- **Microsoft Agent Framework:** the draft → verify → retry/publish loop runs as an Agent Framework workflow (`agents/workflow.py`). Each agent is an `Executor`, and conditional edges route each draft on the Verifier's verdict. Switch it on with `WIM_ENGINE=agent_framework`, the default in the container. A test proves it gives identical results to the inline loop.
+- **Microsoft Agent Framework:** the whole pipeline (TacticsWatcher → Explainer → Verifier with retry/drop → Producer → Personalizer) runs as one Agent Framework workflow graph (`agents/workflow.py`), one run per match event. Each agent is an `Executor`, and conditional edges route each draft on the Verifier's verdict. Switch it on with `WIM_ENGINE=agent_framework`, the default in the container. A test proves it gives identical results to the inline loop.
 - **Microsoft Foundry:** a model deployed in Foundry can write the captions in any language, under the same checks ([docs/LLM.md](docs/LLM.md)).
 - **Azure Container Apps:** the app is hosted there with one command from Cloud Shell ([docs/DEPLOY.md](docs/DEPLOY.md)).
 
@@ -100,7 +102,7 @@ Only what is in the code and the deploy scripts today:
 
 | Technology | Where | Judging criteria it serves |
 | --- | --- | --- |
-| Microsoft Agent Framework | The draft, verify, retry/publish loop is a workflow of `Executor`s with conditional edges (`src/whyitmatters/agents/workflow.py`, `WIM_ENGINE=agent_framework`); a test pins it to the inline loop's results | Technical execution, innovation |
+| Microsoft Agent Framework | The whole pipeline (watch, draft, verify, retry/drop, produce, personalize) is one workflow of `Executor`s with conditional edges (`src/whyitmatters/agents/workflow.py`, `WIM_ENGINE=agent_framework`); a parity test pins cues, verdicts and Truth Score to the inline engine on seeds 0-4 | Technical execution, innovation |
 | Microsoft Foundry / Azure OpenAI | Optional caption writer (`WIM_GENERATOR=llm`), guarded by number, name and length checks, retries, template fallback and a per-match cost cap ([docs/LLM.md](docs/LLM.md)) | Innovation, responsible AI |
 | Azure Container Apps | Hosting, one script from Cloud Shell, one replica kept warm ([docs/DEPLOY.md](docs/DEPLOY.md), `infra/deploy.sh`) | Technical execution, real-world applicability |
 | GitHub Actions and GHCR | CI (lint, tests, detection eval gate, Playwright browser tests), image published to GHCR (`.github/workflows/`) | Technical execution |

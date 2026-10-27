@@ -56,8 +56,13 @@ class Orchestrator:
         self.cues: list[Cue] = []
         self.recap: Recap | None = None
         self.latencies_ms: list[float] = []
-        # "inline" (default) or "agent_framework": the explain/verify/publish loop as a Microsoft
-        # Agent Framework workflow. Same agents, same results; WIM_ENGINE picks it in the API.
+        # Viewers the Personalizer node renders every aired cue for as it airs (none by default;
+        # the API personalizes on request instead).
+        self.live_viewers: list[Viewer] = []
+        self.live_personal: list[PersonalCue] = []
+        # "inline" (default) or "agent_framework": the whole pipeline (watch, explain, verify,
+        # produce, personalize) as a Microsoft Agent Framework workflow. Same agents, same
+        # results; WIM_ENGINE picks it in the API.
         engine = engine or os.environ.get("WIM_ENGINE", "inline")
         self.workflow = None
         if engine == "agent_framework":
@@ -193,6 +198,15 @@ class Orchestrator:
                 )
         if analyse_event:
             self._emit("event", ev.t, ev.model_dump(mode="json", exclude_none=True))
+        if self.workflow is not None:
+            # the whole graph, TacticsWatcher included, runs once per event
+            self.workflow.process(ev, pulse_out, analyse_event)
+            return
+        for cand in self.watch(ev, pulse_out, analyse_event):
+            self._explain(cand)
+
+    def watch(self, ev: Event, pulse_out: list, analyse_event: bool = True) -> list:
+        """The TacticsWatcher step: which moments of this event are worth explaining."""
         candidates = self.analyst.run(
             self.state,
             ev,
@@ -200,19 +214,15 @@ class Orchestrator:
         )
         if not analyse_event:
             candidates = [c for c in candidates if c.kind == "state_shift"]
-        for cand in candidates:
-            self._explain(cand)
+        return candidates
 
     def _count(self, checks) -> None:
         self.stats.claims_generated += len(checks)
         self.stats.claims_verified += sum(c.ok for c in checks)
 
     def _explain(self, cand) -> None:
-        """Draft -> verify -> retry or publish. The same loop runs as a Microsoft Agent Framework
-        workflow when `engine="agent_framework"` (agents/workflow.py)."""
-        if self.workflow is not None:
-            self.workflow.explain(cand)
-            return
+        """Draft -> verify -> retry or publish. With `engine="agent_framework"` the whole
+        pipeline, this loop included, runs as a workflow instead (agents/workflow.py)."""
         started = time.perf_counter()
         verdict = None
         for attempt in range(1, MAX_ATTEMPTS + 1):
