@@ -432,3 +432,46 @@ def test_llm_mode_writes_through_the_api_and_reports_it():
     assert not any(c["translation_unavailable"] for c in body["cues"])
     cues = client.get(f"/matches/{SEED}/cues").json()
     assert cues["trust"]["written_by_model"] > 0 and cues["trust"]["written_by_fallback"] == 0
+
+
+class _FakeOpenAI:
+    """Stands in for an `openai` client; records the kwargs of each create() call."""
+
+    def __init__(self, reject_temperature=False):
+        self.calls, self.reject = [], reject_temperature
+        self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self._create))
+
+    def _create(self, **kw):
+        self.calls.append(kw)
+        if self.reject and "temperature" in kw:
+            raise RuntimeError(
+                "Unsupported value: 'temperature' does not support 0.2 with this model. "
+                "code: unsupported_value"
+            )
+        msg = types.SimpleNamespace(content="{}")
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=msg)])
+
+
+def test_openai_chat_sends_max_completion_tokens():
+    fake = _FakeOpenAI()
+    OpenAIChat(fake, "gpt-4.1-mini").complete("s", "u")
+    kw = fake.calls[0]
+    assert kw["max_completion_tokens"] == 500 and "max_tokens" not in kw
+    assert kw["temperature"] == 0.2
+
+
+def test_openai_chat_retries_without_temperature_and_remembers():
+    fake = _FakeOpenAI(reject_temperature=True)
+    chat = OpenAIChat(fake, "gpt-5-mini")
+    assert chat.complete("s", "u") == "{}"
+    assert len(fake.calls) == 2 and "temperature" not in fake.calls[1]
+    chat.complete("s", "u")
+    assert len(fake.calls) == 3 and "temperature" not in fake.calls[2]
+
+
+def test_openai_chat_does_not_swallow_other_errors():
+    fake = _FakeOpenAI()
+    fake._create = lambda **kw: (_ for _ in ()).throw(TimeoutError("slow"))
+    fake.chat.completions.create = fake._create
+    with pytest.raises(TimeoutError):
+        OpenAIChat(fake, "m").complete("s", "u")

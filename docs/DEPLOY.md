@@ -22,11 +22,11 @@ Skip this section to run on the offline templates (English, Spanish, Catalan); e
 
 1. Open <https://ai.azure.com> (Microsoft Foundry) with the same account.
 2. **Create project**. Name: `whyitmatters`. Let it create a new hub/resource in **West Europe** or **Sweden Central**.
-3. In the project, open **Models + endpoints** → **Deploy model** → **Deploy base model**. Pick **gpt-4o-mini** (or **gpt-4.1-mini** if listed). Deployment type **Global Standard**, then **Deploy**.
+3. In the project, open **Models + endpoints** → **Deploy model** → **Deploy base model**. Pick **gpt-4.1-mini** (recommended; **gpt-5-mini** also works if 4.1 is not listed; gpt-4o-mini is deprecated). Deployment type **Global Standard**, then **Deploy**.
 4. On the deployment page copy three things:
    - **Target URI**: keep only the start, `https://<resource>.openai.azure.com/`
    - **Key**
-   - **Deployment name**, for example `gpt-4o-mini`
+   - **Deployment name**, for example `gpt-4.1-mini`
 
 ## 3. Make the image public (once, 2 min)
 
@@ -49,7 +49,7 @@ Why GHCR: free Azure subscriptions refuse to build images (`TasksOperationsNotAl
 
    ```bash
    export AZURE_OPENAI_ENDPOINT="https://<resource>.openai.azure.com/"
-   export AZURE_OPENAI_DEPLOYMENT="gpt-4o-mini"
+   export AZURE_OPENAI_DEPLOYMENT="gpt-4.1-mini"
    export AZURE_OPENAI_API_KEY="<key>"
    ```
 

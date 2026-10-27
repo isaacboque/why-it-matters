@@ -132,17 +132,36 @@ class OpenAIChat:
 
     def __init__(self, client: Any, model: str, timeout_s: float = DEFAULT_TIMEOUT_S):
         self._client, self._model, self._timeout = client, model, timeout_s
+        self._send_temperature = True
 
     def complete(self, system: str, user: str) -> str:
-        reply = self._client.chat.completions.create(
-            model=self._model,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.2,
-            max_tokens=500,
-            response_format={"type": "json_object"},
-            timeout=self._timeout,
-        )
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            # `max_completion_tokens` works on gpt-4.1 and on reasoning models (gpt-5, o-series),
+            # which reject `max_tokens`.
+            "max_completion_tokens": 500,
+            "response_format": {"type": "json_object"},
+            "timeout": self._timeout,
+        }
+        if self._send_temperature:
+            kwargs["temperature"] = 0.2
+        try:
+            reply = self._client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            if not (self._send_temperature and _rejects_temperature(exc)):
+                raise
+            # Reasoning models only accept the default temperature: retry once without it and
+            # remember that for this deployment.
+            self._send_temperature = False
+            kwargs.pop("temperature")
+            reply = self._client.chat.completions.create(**kwargs)
         return reply.choices[0].message.content or ""
+
+
+def _rejects_temperature(exc: Exception) -> bool:
+    text = f"{exc} {getattr(exc, 'body', '')} {getattr(exc, 'param', '')}".lower()
+    return "temperature" in text and ("unsupported" in text or "does not support" in text)
 
 
 class LLMGenerator:

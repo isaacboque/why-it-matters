@@ -34,6 +34,8 @@ The first line printed says which writer is on (`writer: llm via azure openai / 
 | `WIM_LLM_MAX_CALLS` | cost guard: model requests per match | `60` |
 | `WIM_LLM_TIMEOUT_S` | per-request timeout | `20` |
 
+Recommended Azure/Foundry deployment: `gpt-4.1-mini`. `gpt-5-mini` (and other reasoning models) is supported too: requests use `max_completion_tokens`, and if the API rejects `temperature` the client retries once without it and remembers that for the deployment. gpt-4o-mini is deprecated in Foundry. Use API version `2024-10-21` or later.
+
 Keys are only ever read from the environment; nothing in the repository holds one.
 
 ## What the model is told
