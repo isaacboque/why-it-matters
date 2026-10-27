@@ -35,6 +35,9 @@ from whyitmatters.simulator.xg import expected_goals
 
 HALF = 45 * 60
 BIG_CHANCE_XG = 0.3
+# Final-third shot rate, set with xg.XG_SCALE so shots and goals per team match the Premier League
+# (docs/STATS-AUDIT.md)
+SHOT_RATE = 1.35
 
 
 def _other(side: Side) -> Side:
@@ -103,12 +106,17 @@ class Simulator:
     def _emit(self, **kw) -> Event:
         s = self.s
         s.seq += 1
+        # The last possession of the first half can run a few seconds past 45:00 (a goal also
+        # adds a kick-off delay). The clock must not: the second half restarts at 45:00, so
+        # those events are stamped at the whistle instead of going back in time.
+        # The minute is read from the rounded stamp, so t=60.0 is never "minute 0".
+        t = round(min(s.t, HALF - 0.1) if s.period == 1 else s.t, 1)
         ev = Event(
             id=f"{self.match_id}-{s.seq:05d}",
             seq=s.seq,
-            t=round(s.t, 1),
+            t=t,
             period=s.period,
-            minute=int(s.t // 60),
+            minute=int(t // 60),
             possession_id=s.possession_id,
             score_home=s.score["home"],
             score_away=s.score["away"],
@@ -195,7 +203,7 @@ class Simulator:
             # 3. Shot?
             if x > 75:
                 central = 1.0 - abs(y - PITCH_WIDTH / 2) / (PITCH_WIDTH / 2)
-                p_shot = 0.012 + 0.19 * ((x - 75) / 30) ** 1.5 * max(central, 0.15)
+                p_shot = SHOT_RATE * (0.012 + 0.19 * ((x - 75) / 30) ** 1.5 * max(central, 0.15))
                 if rng.random() < p_shot:
                     return self._shot(att, holder, x, y, pressured)
 
@@ -275,7 +283,7 @@ class Simulator:
             outcome = Outcome.GOAL
         elif r2 < 0.27:
             outcome = Outcome.BLOCKED
-        elif r2 < 0.62:
+        elif r2 < 0.52:
             outcome = Outcome.SAVED
         else:
             outcome = Outcome.OFF_TARGET
