@@ -7,6 +7,7 @@ import math
 from whyitmatters.schema import PITCH_LENGTH, PITCH_WIDTH
 
 GOAL_HALF_WIDTH = 3.66
+XG_SCALE = 0.86  # more shots at the same goal count: each one is worth less (docs/STATS-AUDIT.md)
 
 
 def opening_angle(x: float, y: float) -> float:
@@ -23,7 +24,7 @@ def distance_to_goal(x: float, y: float) -> float:
 
 def expected_goals(x: float, y: float, under_pressure: bool = False) -> float:
     z = -1.25 + 1.6 * opening_angle(x, y) - 0.09 * distance_to_goal(x, y)
-    xg = 1.0 / (1.0 + math.exp(-z))
+    xg = XG_SCALE / (1.0 + math.exp(-z))
     if under_pressure:
         xg *= 0.7
     return round(min(max(xg, 0.01), 0.95), 3)
