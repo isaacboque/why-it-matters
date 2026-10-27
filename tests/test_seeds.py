@@ -141,3 +141,32 @@ def test_parse_seeds():
 def test_parse_seeds_rejects_junk(bad):
     with pytest.raises(ValueError):
         parse_seeds(bad)
+
+
+# ---------------------------------------------------------------- goals and xG calibration
+def test_featuring_penalises_implausible_matches():
+    # seed 60 used to be 4.22 xG for one team; whatever the simulator does, a featured match
+    # never has a team-match above 3.0 xG or a 6+ goal scoreline
+    feat = json.loads(FEATURED.read_text(encoding="utf-8"))
+    for f in feat:
+        ev = _m(f["seed"]).events
+        for side in ("home", "away"):
+            assert sum(e.xg or 0 for e in ev if e.type == "shot" and e.side == side) <= 3.0
+        assert sum(e.type == "shot" and e.outcome == "goal" for e in ev) < 6
+
+
+def test_xg_calibration_league_like():
+    xg = shots = goals = 0.0
+    tm = 0
+    over = 0
+    for seed in range(40):
+        ev = _m(seed).events
+        for side in ("home", "away"):
+            sh = [e for e in ev if e.type == "shot" and e.side == side]
+            x = sum(e.xg for e in sh)
+            xg, shots, tm, over = xg + x, shots + len(sh), tm + 1, over + (x > 3.0)
+            goals += sum(e.outcome == "goal" for e in sh)
+    assert 1.2 <= xg / tm <= 1.65  # team xG per match (league about 1.4 to 1.5)
+    assert 0.09 <= xg / shots <= 0.125  # xG per shot
+    assert over / tm <= 0.06
+    assert 0.8 <= goals / xg <= 1.2  # goals track xG

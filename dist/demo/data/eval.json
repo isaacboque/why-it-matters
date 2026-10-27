@@ -1,1 +1,1 @@
-{"matches":20,"precision":0.609,"recall":0.835,"minute_accuracy":0.571,"timeline_accuracy":0.806,"mean_detection_lag_min":5.31,"shape_windows":1872,"formation_out_accuracy":0.735,"formation_in_accuracy":0.93,"block_accuracy":0.759}
+{"matches":20,"precision":0.601,"recall":0.819,"minute_accuracy":0.569,"timeline_accuracy":0.803,"mean_detection_lag_min":5.31,"shape_windows":1872,"formation_out_accuracy":0.744,"formation_in_accuracy":0.93,"block_accuracy":0.743}
