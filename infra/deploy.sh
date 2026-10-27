@@ -37,7 +37,7 @@ az containerapp up \
   --source . \
   --ingress external \
   --target-port 8000 \
-  --env-vars WIM_ENGINE=agent_framework WIM_WARM_SEEDS=60,32,109,409,51,156,173,281
+  --env-vars WIM_ENGINE=agent_framework WIM_WARM_SEEDS=60,32,51,156,173,194,409,487
 
 say "Keeping one replica warm so judges never hit a cold start"
 az containerapp update --name "$APP" --resource-group "$RG" \

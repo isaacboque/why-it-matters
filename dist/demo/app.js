@@ -58,6 +58,12 @@ const METRICS = {
   box_entries: "Box entries", zone14_entries: "Zone 14 entries", halfspace_entries: "Half-space entries",
   xt_share_left: "Threat down the left", xt_share_centre: "Threat through the middle", xt_share_right: "Threat down the right",
   pass_xt_added: "xT added by the pass", pass_packing: "Opponents the pass bypassed",
+  press_wins: "Successful presses", press_success: "Press success", regains: "Ball wins", regains_wide_share: "Wide regains",
+  press_escapes_short: "Escapes through the press", press_escapes_long: "Escapes over the press", press_escapes: "Press escapes",
+  press_escape_rate: "Press-escape rate", big_chances: "Big chances", xg_per_shot: "xG per shot", finishing: "Finishing vs xG",
+  shots_cutback: "Shots from cut-backs", shots_cross: "Shots from crosses", shots_through: "Shots from through balls", shots_long: "Long shots",
+  hub_share: "Hub share", player_involvement: "Player involvement", distance_per_min: "Distance per player (m/min)",
+  sprints: "Sprints", high_speed_runs: "High-speed runs", top_speed_kmh: "Top speed (km/h)",
 };
 const LINE_NAMES = { back: "defence", midfield: "midfield", forward: "forwards" };
 const UNITS = {
@@ -74,12 +80,18 @@ const UNITS = {
   line_breaks_back: "count", line_breaks_mid: "count", line_breaks_fwd: "count", between_mid_def: "count", between_fwd_mid: "count",
   zone14_entries: "count", halfspace_entries: "count", xt_share_left: "share", xt_share_centre: "share",
   xt_share_right: "share", pass_xt_added: "xg", pass_packing: "count",
+  press_wins: "count", press_success: "share", regains: "count", regains_wide_share: "share", press_escapes_short: "count",
+  press_escapes_long: "count", press_escapes: "count", press_escape_rate: "share", big_chances: "count", xg_per_shot: "xg",
+  finishing: "xg", shots_cutback: "count", shots_cross: "count", shots_through: "count", shots_long: "count",
+  hub_share: "share", player_involvement: "share", distance_per_min: "metres", sprints: "count", high_speed_runs: "count",
+  top_speed_kmh: "kmh",
 };
 const KINDS = {
   goal: "Goal", state_shift: "Control shift", big_chance: "Big chance", top_speed: "Top speed", pass_master: "Passing",
   press_surge: "Pressing", midfield_battle: "Midfield battle", danger_turnovers: "Dangerous losses", direct_switch: "Going long",
   pass_difficulty: "Hardest pass", shot_speed: "Fastest shot", line_breakers: "Through the lines", zone_damage: "Danger zone",
   momentum_swing: "Momentum", shape_change: "Change of shape", lines_stretched: "Stretched lines", most_dangerous_pass: "Killer pass",
+  block_drop: "Dropping deep", hub_player: "Pass hub", press_escape: "Beating the press", physical_drop: "Tiring legs",
 };
 
 const S = {};

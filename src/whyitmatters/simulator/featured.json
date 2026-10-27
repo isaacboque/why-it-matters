@@ -1,7 +1,7 @@
 [
   {
     "seed": 32,
-    "title": "Press vs patience",
+    "title": "Control, then chaos",
     "tags": [
       "comeback",
       "press-vs-patience",
@@ -42,18 +42,6 @@
     "away": "Ravenmoor United"
   },
   {
-    "seed": 109,
-    "title": "A match with everything",
-    "tags": [
-      "late-winner",
-      "press-vs-patience",
-      "control-vs-chaos",
-      "insight-mix"
-    ],
-    "home": "Ashvale Town",
-    "away": "Harbor City"
-  },
-  {
     "seed": 156,
     "title": "Caught in the act at Elmstead Wanderers",
     "tags": [
@@ -80,21 +68,21 @@
     "away": "Kingsford Rovers"
   },
   {
-    "seed": 281,
-    "title": "Late drama at Northbridge Athletic",
+    "seed": 194,
+    "title": "Late drama at Harbor City",
     "tags": [
       "late-winner",
       "comeback",
+      "press-vs-patience",
       "control-vs-chaos",
-      "verifier-stress",
       "insight-mix"
     ],
-    "home": "Northbridge Athletic",
-    "away": "Ravenmoor United"
+    "home": "Harbor City",
+    "away": "Ashvale Town"
   },
   {
     "seed": 409,
-    "title": "Control, then chaos",
+    "title": "Press vs patience",
     "tags": [
       "late-winner",
       "comeback",
@@ -105,5 +93,17 @@
     ],
     "home": "Elmstead Wanderers",
     "away": "Harbor City"
+  },
+  {
+    "seed": 487,
+    "title": "A match with everything",
+    "tags": [
+      "late-winner",
+      "comeback",
+      "control-vs-chaos",
+      "insight-mix"
+    ],
+    "home": "Westholm Albion",
+    "away": "Ravenmoor United"
   }
 ]
