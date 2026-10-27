@@ -79,11 +79,11 @@ The simulator's averages over seeds 0-99, compared with public Premier League fi
 
 | Per match | Simulator (seeds 0-99) | Reference | Gap | Source |
 | --- | --- | --- | --- | --- |
-| Passes, both teams | 907.7 | 893.4 (2024-25) | +2 % | [Opta Analyst](https://theanalyst.com/articles/premier-league-teams-still-more-direct-2025-26) |
-| Long balls ≥ 32 m, both teams | 94.4 | 93.4 (2024-25) | +1 % | same article |
-| Goals | 2.92 | 2.75 to 3.28 (2023-26, all 1,140 matches; 2.80 over the first 210 of 2025-26) | within range | same article |
-| Accurate passes per team | 355.6 | ≈ 360.5 (2025-26; derived: mean of the 20 teams) | −1 % | [playerstats.football](https://playerstats.football/premier-league/stats/accurate-passes/previous) |
-| Shots per team | 13.2 | 12.5 to 13.8 (2023-26) | within range | [football-data.co.uk](https://www.football-data.co.uk/englandm.php) |
+| Passes, both teams | 913.7 | 893.4 (2024-25) | +2 % | [Opta Analyst](https://theanalyst.com/articles/premier-league-teams-still-more-direct-2025-26) |
+| Long balls ≥ 32 m, both teams | 97.5 | 93.4 (2024-25) | +4 % | same article |
+| Goals | 3.42 | 2.75 to 3.28 (2023-26, all 1,140 matches; 2.80 over the first 210 of 2025-26) | +0.14 above range on these 100 seeds (seeds 100-299: 2.95; standard error of 100 matches about 0.17) | same article |
+| Accurate passes per team | 357.6 | ≈ 360.5 (2025-26; derived: mean of the 20 teams) | −1 % | [playerstats.football](https://playerstats.football/premier-league/stats/accurate-passes/previous) |
+| Shots per team | 13.0 | 12.5 to 13.8 (2023-26) | within range | [football-data.co.uk](https://www.football-data.co.uk/englandm.php) |
 | Shots on target per team | 4.5 | 4.2 to 4.9 (2023-26) | within range | same |
 
 "Derived" means we computed the reference from the source's own numbers; the source does not state it as a single figure.
@@ -95,3 +95,7 @@ Reproduce the table with:
 ```bash
 python -c "import statistics as s; from whyitmatters.simulator import simulate; ms=[simulate(i) for i in range(100)]; print(s.mean(sum(e.type=='pass' for e in m.events) for m in ms))"
 ```
+
+### Club identities (better seeds)
+
+Each of the eight fictional clubs has a persistent identity (`simulator/teams.py::CLUB_IDENTITY`: possession, direct, high-press or low-block, with a quality offset and pressing, tempo, directness, block-height and attack multipliers). A side that leads late drops its block and slows down; a trailing side presses and goes direct (`simulator/phases.py::game_state`). The multipliers average close to 1 across the league, so the table above barely moved, and it was re-measured after the change. Goals over seeds 0-99 went from 2.92 to 3.42. That is mostly the sampling of this particular set: 100 matches have a standard error of about 0.17, and seeds 100-299 give 2.95. It is above the reference range but inside the band `tests/test_stats_audit.py` allows. Detection on `eval --seeds 20` moved from precision 0.66 / recall 0.91 / timeline 0.82 to 0.61 / 0.84 / 0.81 (every target still met), because each club now deviates from the scripted phase styles by its own identity. `tests/test_seeds.py` pins that identities differ and that the scoreline distribution stays in the audit ranges. The featured matches (`featured.json`) are chosen by `python -m whyitmatters.simulator.featured --seeds 0-499`.

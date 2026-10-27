@@ -55,7 +55,7 @@ The simulator plants known answers (who controls the game, when it turns to chao
 
 | Held-out matches | Shift recall | Shift precision | Timeline accuracy | Detection lag |
 | --- | --- | --- | --- | --- |
-| 20 | 0.91 | 0.66 | 0.82 | 5.5 min |
+| 20 | 0.84 | 0.61 | 0.81 | 5.3 min |
 
 CI fails if any of these drop below target.
 
@@ -122,8 +122,8 @@ This is a prototype on synthetic data. What it would take to run on a real feed,
 
 - **Truth Score** is the share of claims that match a recomputation from the raw event log, which the Verifier does independently of the writer. On clean drafts it is 1.00 by construction, so on its own it is weak evidence.
 - **The stronger evidence is the fault-injection test:** with a model that mis-states 30 % of first drafts, raw Truth Score is 0.93 (first-draft accuracy 0.70), every retry recovers, and on-air accuracy is 1.00. That shows the Verifier does the catching. Try it with **Unreliable model**.
-- **Held-out detection metrics** (20 matches the engine was never tuned on) are scored against the known answers the simulator planted: recall 0.87, precision 0.67, timeline accuracy 0.82, lag 5.4 min.
-- **Precision 0.67 vs recall 0.87 is a deliberate trade-off:** the engine prefers to flag a possible shift over missing one, and the Producer budget (3 cues per 5 minutes, significance ranking) then filters what airs.
+- **Held-out detection metrics** (20 matches the engine was never tuned on) are scored against the known answers the simulator planted: recall 0.84, precision 0.61, timeline accuracy 0.81, lag 5.3 min.
+- **Precision 0.61 vs recall 0.84 is a deliberate trade-off:** the engine prefers to flag a possible shift over missing one, and the Producer budget (3 cues per 5 minutes, significance ranking) then filters what airs.
 - All of this is on synthetic matches; it validates the pipeline, not real-world football accuracy. See [docs/METHODS.md](docs/METHODS.md).
 
 ## Data and methods

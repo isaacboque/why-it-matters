@@ -28,9 +28,9 @@ from whyitmatters.schema import (
     Side,
     Team,
 )
-from whyitmatters.simulator.phases import Style, script_phases, style_at
+from whyitmatters.simulator.phases import Identity, Style, script_phases, style_at
 from whyitmatters.simulator.positions import add_freeze_frames
-from whyitmatters.simulator.teams import CLUBS, VENUES, make_team, nominal_xy
+from whyitmatters.simulator.teams import CLUB_IDENTITY, CLUBS, VENUES, make_team, nominal_xy
 from whyitmatters.simulator.xg import expected_goals
 
 HALF = 45 * 60
@@ -76,6 +76,9 @@ class Simulator:
             "home": self.rng.uniform(-0.02, 0.03),
             "away": self.rng.uniform(-0.03, 0.02),
         }
+        self.identity: dict[Side, Identity] = {
+            s: CLUB_IDENTITY[self.teams[s].short_name] for s in ("home", "away")
+        }
         self.phases = script_phases(self.rng)
         self.match_id = (
             f"syn-{seed:04d}-{self.teams['home'].short_name}-{self.teams['away'].short_name}"
@@ -86,7 +89,10 @@ class Simulator:
 
     # ------------------------------------------------------------------ helpers
     def _style(self, side: Side) -> Style:
-        return style_at(self.phases, self.s.t / 60.0, side, self.quality[side])
+        diff = self.s.score[side] - self.s.score[_other(side)]
+        return style_at(
+            self.phases, self.s.t / 60.0, side, self.quality[side], self.identity[side], diff
+        )
 
     def _pick_player(self, side: Side, x: float, y: float, exclude: str | None = None) -> Player:
         """A player whose nominal position is near (x, y), in that team's perspective."""
@@ -203,7 +209,8 @@ class Simulator:
             # 3. Shot?
             if x > 75:
                 central = 1.0 - abs(y - PITCH_WIDTH / 2) / (PITCH_WIDTH / 2)
-                p_shot = SHOT_RATE * (0.012 + 0.19 * ((x - 75) / 30) ** 1.5 * max(central, 0.15))
+                base = 0.012 + 0.19 * ((x - 75) / 30) ** 1.5 * max(central, 0.15)
+                p_shot = SHOT_RATE * self.identity[att].attack * base
                 if rng.random() < p_shot:
                     return self._shot(att, holder, x, y, pressured)
 

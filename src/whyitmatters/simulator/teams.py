@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 
 from whyitmatters.schema import Player, Side, Team
+from whyitmatters.simulator.phases import Identity
 
 CLUBS = [
     ("Northbridge Athletic", "NBA"),
@@ -16,6 +17,18 @@ CLUBS = [
     ("Corrin Bay", "CRB"),
     ("Elmstead Wanderers", "ELW"),
 ]
+
+# Persistent club identities: the same club plays the same way in every match it appears in.
+CLUB_IDENTITY: dict[str, Identity] = {
+    "NBA": Identity("possession", 0.030, 1.00, 1.06, 0.78, 3.0),
+    "HBC": Identity("high-press", 0.015, 1.40, 0.92, 1.00, 6.0, 1.00),
+    "RVM": Identity("direct", -0.020, 0.90, 0.90, 1.30, 0.0, 1.00),
+    "KFR": Identity("low-block", -0.010, 0.60, 1.06, 1.05, -7.0, 0.95),
+    "ASH": Identity("possession", 0.010, 1.05, 1.04, 0.85, 2.0),
+    "WHA": Identity("direct", -0.030, 1.00, 0.92, 1.25, 1.0, 1.00),
+    "CRB": Identity("high-press", 0.000, 1.30, 0.94, 1.00, 5.0, 1.00),
+    "ELW": Identity("low-block", 0.005, 0.65, 1.04, 1.00, -6.0, 0.97),
+}
 
 VENUES = ["Riverside Park", "The Foundry Ground", "Millgate Stadium", "Harbourfront Arena"]
 

@@ -24,7 +24,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-whyitmatters = ["pulse/xt_grid.json"]
+whyitmatters = ["pulse/xt_grid.json", "simulator/featured.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
