@@ -20,8 +20,18 @@ Tactical metrics (also from the acting team's perspective; SPEC.md has the one-l
 - progressive_passes: completed passes that move the ball >= 10 m towards goal
   or into the final third
 - long_ball_share: share of a team's passes that travel >= 30 m
-- central_buildup_share: share of build-up passes (x <= 63) started in the central
+- central_build_up_share: share of build-up passes (x <= 63) started in the central
   third of the pitch width
+
+Pressing, chances, hub and physical (docs/METHODS.md has the definitions):
+- press_wins: a team's pressures followed within 5 s by that team winning the ball
+- regains_wide_share: share of a team's ball wins made in the outer thirds of the width
+- press_escapes: completed build-up passes (x <= 63) that beat the first line of the press,
+  i.e. break the opponent's forward line or are received between forwards and midfield
+  (`press_escapes_short`), or that go long (`press_escapes_long`)
+- shot kinds: pulse/chances.py; big chances: xG >= 0.3
+- hub: the player who made or received the most of the team's completed passes
+- distance_per_min, sprints, top speed: pulse/physical.py (freeze-frame checkpoints)
 """
 
 from __future__ import annotations
@@ -29,10 +39,11 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from whyitmatters.pulse import damage
+from whyitmatters.pulse import chances, damage
 from whyitmatters.pulse import xt as xt_model
+from whyitmatters.pulse.physical import HIGH_KMH, SPRINT_KMH, Checkpoints
 from whyitmatters.pulse.shape import (
     MIN_FRAMES,
     ShapeSummary,
@@ -50,6 +61,7 @@ MAX_INPLAY_GAP = 20.0  # seconds; longer gaps are dead ball and not credited
 HALF_X = PITCH_LENGTH / 2
 DEFENSIVE_THIRD_X = 35.0
 COUNTER_PRESS_S = 5.0
+PRESS_WIN_S = 5.0  # a pressure that is followed by a ball win within this long was a success
 PROGRESSIVE_M = 10.0
 LONG_BALL_M = 30.0
 CENTRAL_Y = (PITCH_WIDTH / 3, 2 * PITCH_WIDTH / 3)
@@ -131,6 +143,24 @@ class SideMinute:
     halfspace_entries: int = 0
     best_pass_xt: float = 0.0
     best_pass_id: str | None = None
+    # pressing and defending
+    press_wins: int = 0
+    regains: int = 0
+    regains_wide: int = 0
+    press_escapes_short: int = 0
+    press_escapes_long: int = 0
+    # chances (pulse/chances.py)
+    big_chances: int = 0
+    shots_cutback: int = 0
+    shots_cross: int = 0
+    shots_through: int = 0
+    shots_long: int = 0
+    # physical (pulse/physical.py): outfield players' legs between freeze-frame checkpoints
+    distance_m: float = 0.0
+    sprints: int = 0
+    high_speed_runs: int = 0
+    top_kmh: float = 0.0
+    inv: dict[str, int] = field(default_factory=dict)  # completed passes made or received
     evidence: list[str] = field(default_factory=list)  # event ids worth citing
 
 
@@ -192,6 +222,32 @@ class TeamWindow(BaseModel):
     xt_share_right: float | None = None
     best_pass_xt: float = 0.0  # the window's most dangerous completed pass
     best_pass_id: str | None = None
+    # pressing and defending
+    press_wins: int = 0
+    press_success: float = 0.0  # press_wins / pressures
+    regains: int = 0
+    regains_wide_share: float = 0.0
+    press_escapes_short: int = 0
+    press_escapes_long: int = 0
+    press_escapes: int = 0
+    press_escape_rate: float = 0.0  # escapes / build-up passes
+    # chances
+    big_chances: int = 0
+    xg_per_shot: float = 0.0
+    finishing: float = 0.0  # goals minus xG
+    shots_cutback: int = 0
+    shots_cross: int = 0
+    shots_through: int = 0
+    shots_long: int = 0
+    # hub: who made or received the most completed passes, and their share of all of them
+    hub_player: str | None = None
+    hub_share: float = 0.0
+    involvement: dict[str, float] = Field(default_factory=dict, exclude=True)
+    # physical (pulse/physical.py)
+    distance_per_min: float = 0.0  # metres per outfield player per minute
+    sprints: int = 0
+    high_speed_runs: int = 0
+    top_speed_kmh: float = 0.0
 
 
 class WindowMetrics(BaseModel):
@@ -216,6 +272,9 @@ class MinuteCounter:
         self.last_period: int | None = None
         self.max_minute = 0
         self.last_loss_t: dict[Side, float] = {}  # when each team last lost the ball
+        self.pressure_t: dict[Side, list[float]] = {"home": [], "away": []}
+        self.prev_ev: Event | None = None
+        self.checkpoints = Checkpoints()
 
     def ingest(self, ev: Event) -> None:
         b = self.buckets[ev.minute]
@@ -231,6 +290,13 @@ class MinuteCounter:
 
         s = b[ev.side]
         if ev.freeze is not None:
+            for side, legs in self.checkpoints.ingest(ev).items():
+                dst = b[side]
+                for leg in legs:
+                    dst.distance_m += leg.metres
+                    dst.sprints += leg.kmh >= SPRINT_KMH
+                    dst.high_speed_runs += leg.kmh >= HIGH_KMH
+                    dst.top_kmh = max(dst.top_kmh, leg.kmh)
             holder = possession_side(ev)
             for side in ("home", "away"):
                 frame = own_frame(ev, side)
@@ -267,6 +333,14 @@ class MinuteCounter:
                 s.line_breaks_fwd += "forward" in roles
                 s.packing += damage.packing(ev)
                 gaps = damage.reception_gaps(ev)
+                if ev.x <= BUILD_UP_X:  # beating the first line of the press
+                    if "forward" in roles or "fwd_mid" in gaps:
+                        s.press_escapes_short += 1
+                    elif (ev.pass_distance or 0.0) >= LONG_BALL_M:
+                        s.press_escapes_long += 1
+                s.inv[ev.player_id or "?"] = s.inv.get(ev.player_id or "?", 0) + 1
+                if ev.receiver_id:
+                    s.inv[ev.receiver_id] = s.inv.get(ev.receiver_id, 0) + 1
                 s.between_lines += bool(gaps)
                 s.between_mid_def += "mid_def" in gaps
                 s.between_fwd_mid += "fwd_mid" in gaps
@@ -299,6 +373,10 @@ class MinuteCounter:
         elif ev.type == EventType.SHOT:
             s.shots += 1
             s.xg += ev.xg or 0.0
+            s.big_chances += (ev.xg or 0.0) >= chances.BIG_CHANCE_XG
+            kind = chances.shot_kind(self.prev_ev, ev)
+            if kind != "other":
+                setattr(s, f"shots_{kind}", getattr(s, f"shots_{kind}") + 1)
             s.evidence.append(ev.id)
             if ev.outcome == Outcome.GOAL:
                 s.goals += 1
@@ -306,6 +384,7 @@ class MinuteCounter:
             self.poss_side = None
         elif ev.type == EventType.PRESSURE:
             s.pressures += 1
+            self.pressure_t[ev.side].append(ev.t)
         elif ev.type in (EventType.TACKLE, EventType.INTERCEPTION, EventType.FOUL):
             if ev.x >= PRESS_ZONE_X:
                 s.press_actions += 1
@@ -319,6 +398,12 @@ class MinuteCounter:
                 )
             won = ev.type == EventType.INTERCEPTION or ev.outcome == Outcome.WON
             if won and ev.type != EventType.FOUL:
+                s.regains += 1
+                if not damage.THIRD_Y[0] <= ev.y < damage.THIRD_Y[1]:
+                    s.regains_wide += 1
+                if any(0 <= ev.t - t <= PRESS_WIN_S for t in self.pressure_t[ev.side]):
+                    s.press_wins += 1
+                    self.pressure_t[ev.side] = []  # one win per press
                 if ev.x >= HALF_X:
                     s.high_recoveries += 1
                 if ev.x >= FINAL_THIRD_X:
@@ -346,6 +431,10 @@ class MinuteCounter:
             self._close_chain(b, turnover=False)
             self.poss_side = None
             self.last_t = None
+        self.prev_ev = ev
+        stale = self.pressure_t[ev.side]
+        if len(stale) > 8:
+            del stale[:-8]
 
     def _close_chain(self, b: dict[Side, SideMinute], turnover: bool) -> None:
         if self.poss_side is None:
@@ -404,8 +493,24 @@ class MinuteCounter:
                     "box_entries",
                     "zone14_entries",
                     "halfspace_entries",
+                    "press_wins",
+                    "regains",
+                    "regains_wide",
+                    "press_escapes_short",
+                    "press_escapes_long",
+                    "big_chances",
+                    "shots_cutback",
+                    "shots_cross",
+                    "shots_through",
+                    "shots_long",
+                    "distance_m",
+                    "sprints",
+                    "high_speed_runs",
                 ):
                     setattr(dst, f, getattr(dst, f) + getattr(src, f))
+                dst.top_kmh = max(dst.top_kmh, src.top_kmh)
+                for pid, n in src.inv.items():
+                    dst.inv[pid] = dst.inv.get(pid, 0) + n
                 if src.best_pass_xt > dst.best_pass_xt:
                     dst.best_pass_xt, dst.best_pass_id = src.best_pass_xt, src.best_pass_id
                 for f in ("pos_in", "pos_out", "xt_zone"):
@@ -436,7 +541,34 @@ class MinuteCounter:
             def lane_share(j: int) -> float | None:
                 return round(lanes[j] / positive, 3) if positive > 0 else None
 
+            hub = min(me.inv.items(), key=lambda kv: (-kv[1], kv[0]), default=None)
+            done = me.passes_complete
+            escapes = me.press_escapes_short + me.press_escapes_long
             return TeamWindow(
+                press_wins=me.press_wins,
+                press_success=round(me.press_wins / me.pressures, 3) if me.pressures else 0.0,
+                regains=me.regains,
+                regains_wide_share=round(me.regains_wide / me.regains, 3) if me.regains else 0.0,
+                press_escapes_short=me.press_escapes_short,
+                press_escapes_long=me.press_escapes_long,
+                press_escapes=escapes,
+                press_escape_rate=(
+                    round(escapes / me.build_up_passes, 3) if me.build_up_passes else 0.0
+                ),
+                big_chances=me.big_chances,
+                xg_per_shot=round(me.xg / me.shots, 3) if me.shots else 0.0,
+                finishing=round(me.goals - me.xg, 2),
+                shots_cutback=me.shots_cutback,
+                shots_cross=me.shots_cross,
+                shots_through=me.shots_through,
+                shots_long=me.shots_long,
+                hub_player=hub[0] if hub and done else None,
+                hub_share=round(hub[1] / done, 3) if hub and done else 0.0,
+                involvement={k: round(v / done, 3) for k, v in me.inv.items()} if done else {},
+                distance_per_min=round(me.distance_m / 10 / minutes, 1),
+                sprints=me.sprints,
+                high_speed_runs=me.high_speed_runs,
+                top_speed_kmh=round(me.top_kmh, 1),
                 line_breaks=me.line_breaks,
                 packing=me.packing,
                 between_lines=me.between_lines,

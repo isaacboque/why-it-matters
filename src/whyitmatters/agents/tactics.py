@@ -18,6 +18,14 @@ Damage and shape (freeze frames and Expected Threat; pulse/damage.py, pulse/shap
 - lines_stretched:     the gap between a team's back line and midfield opens up
 - most_dangerous_pass: one completed pass adds a lot of threat and takes players out of the game
 
+Depth (pressing, pass network, physical; pulse/metrics.py, pulse/physical.py):
+
+- block_drop:    a team's back line, out of possession, drops a long way from the window before
+- hub_player:    one player is involved in far more of a team's completed passes than anyone else
+                 (10-minute windows)
+- press_escape:  a team keeps beating the first line of the press in build-up
+- physical_drop: a team runs clearly less per player per minute than early in the match
+
 Thresholds were set on seeds 0-39; the held-out check is the insight-per-match table in README.
 """
 
@@ -31,6 +39,7 @@ from whyitmatters.pulse import damage
 from whyitmatters.pulse import xt as xt_model
 from whyitmatters.pulse.engine import PulseSnapshot
 from whyitmatters.pulse.metrics import (
+    BUILD_UP_X,
     FINAL_THIRD_X,
     HALF_X,
     LONG_BALL_M,
@@ -83,6 +92,23 @@ STRETCH_GROWTH_M = 3.0
 DANGEROUS_PASS_XT = 0.09
 DANGEROUS_PASS_PACKING = 3
 
+DROP_M = 14.0  # the back line, out of possession, is this much deeper than 5 minutes ago
+
+HUB_WINDOW = 10
+HUB_SHARE = 0.55  # of the team's completed passes made or received by one player...
+HUB_MARGIN = 0.12  # ...this much more than the next player...
+HUB_RISE = 0.10  # ...and this much more than the same player's share in the window before
+
+ESCAPE_MIN = 7  # build-up passes beating the first line of the press in the window
+ESCAPE_RATE = 0.35  # of all the team's build-up passes...
+ESCAPE_RATE_BEFORE = 0.27  # ...after at most this in the window before
+ESCAPE_MAX_OPP_PPDA = 9.0  # and the opponent is really pressing
+
+PHYSICAL_FROM = 54  # first minute: needs a reference window and a late stretch
+PHYSICAL_WINDOW = 10
+PHYSICAL_REF = (15, 29)  # the team's own early-match reference (minutes, inclusive)
+PHYSICAL_DROP = 0.20  # running this much less per player per minute than in the reference
+
 COOLDOWN_MIN = {  # the same kind about the same team is not voiced again within this long
     "press_surge": 15,
     "midfield_battle": 20,
@@ -94,6 +120,10 @@ COOLDOWN_MIN = {  # the same kind about the same team is not voiced again within
     "shape_change": 30,
     "lines_stretched": 20,
     "most_dangerous_pass": 12,
+    "block_drop": 25,
+    "hub_player": 30,
+    "press_escape": 20,
+    "physical_drop": 30,
 }
 ANY_TACTICAL_GAP_MIN = 6  # and at most one tactical insight every few minutes
 AFTER_SHIFT_QUIET_MIN = 4  # a control shift has just said it; do not repeat it as a reason
@@ -108,6 +138,10 @@ SIGNIFICANCE = {
     "zone_damage": 0.45,
     "lines_stretched": 0.45,
     "most_dangerous_pass": 0.4,
+    "block_drop": 0.42,
+    "hub_player": 0.4,
+    "press_escape": 0.45,
+    "physical_drop": 0.45,
 }
 
 
@@ -235,6 +269,40 @@ def lines_stretched(me: TeamWindow, opp: TeamWindow, was: TeamWindow) -> bool:
     )
 
 
+def block_drop(me: TeamWindow, was: TeamWindow) -> bool:
+    if me.line_height is None or was.line_height is None:
+        return False
+    return was.line_height - me.line_height >= DROP_M
+
+
+def hub_player(me: TeamWindow, was: TeamWindow) -> str | None:
+    """The player who made or received a clearly outsized share of the team's completed passes."""
+    if me.hub_player is None or me.hub_share < HUB_SHARE:
+        return None
+    shares = sorted(me.involvement.values(), reverse=True)
+    if len(shares) < 2 or shares[0] - shares[1] < HUB_MARGIN:
+        return None
+    if me.hub_share - was.involvement.get(me.hub_player, 0.0) < HUB_RISE:
+        return None
+    return me.hub_player
+
+
+def press_escape(me: TeamWindow, opp: TeamWindow, was: TeamWindow) -> bool:
+    return (
+        me.press_escapes >= ESCAPE_MIN
+        and me.press_escape_rate >= ESCAPE_RATE
+        and was.press_escape_rate <= ESCAPE_RATE_BEFORE
+        and opp.ppda is not None
+        and opp.ppda <= ESCAPE_MAX_OPP_PPDA
+    )
+
+
+def physical_drop(me: TeamWindow, ref: TeamWindow) -> bool:
+    return ref.distance_per_min > 0 and me.distance_per_min <= (1 - PHYSICAL_DROP) * (
+        ref.distance_per_min
+    )
+
+
 def shape_changed(state: Blackboard, minute: int, side: Side) -> bool:
     """The in-possession shape over the last 8 minutes differs from the 8 before, and both
     readings are stable (the windows ending two minutes earlier agree with them)."""
@@ -277,6 +345,21 @@ def _threat_by(side: Side) -> Callable[[Event], bool]:
     )
 
 
+def _hub_passes(player_id: str) -> Callable[[Event], bool]:
+    return lambda e: damage.is_completed_pass(e) and player_id in (e.player_id, e.receiver_id)
+
+
+def _escape_by(side: Side) -> Callable[[Event], bool]:
+    def pred(e: Event) -> bool:
+        if e.side != side or not damage.is_completed_pass(e) or e.x > BUILD_UP_X:
+            return False
+        if "forward" in damage.lines_broken_roles(e) or "fwd_mid" in damage.reception_gaps(e):
+            return True
+        return (e.pass_distance or 0.0) >= LONG_BALL_M
+
+    return pred
+
+
 def _passes_by(side: Side) -> Callable[[Event], bool]:
     """The team's own passes: their freeze frames show the shape in possession."""
     return lambda e: e.side == side and e.type == EventType.PASS
@@ -304,7 +387,18 @@ class TacticsWatcher:
         now = snap.window
         before = state.pulse.counter.window(minute - WINDOW, WINDOW)
         found: list[tuple[InsightKind, Side, Callable[[Event], bool]]] = []
-        shape_now = state.pulse.counter.window(minute, SHAPE_WINDOW)
+        extra: dict[tuple[InsightKind, Side], tuple[WindowMetrics, str | None]] = {}
+        counter = state.pulse.counter
+        shape_now = counter.window(minute, SHAPE_WINDOW)
+        hub_now = counter.window(minute, HUB_WINDOW)
+        hub_before = (
+            counter.window(minute - HUB_WINDOW, HUB_WINDOW) if minute >= HUB_WINDOW else None
+        )
+        late = minute >= PHYSICAL_FROM
+        phys_now = counter.window(minute, PHYSICAL_WINDOW) if late else None
+        phys_ref = (
+            counter.window(PHYSICAL_REF[1], PHYSICAL_REF[1] - PHYSICAL_REF[0] + 1) if late else None
+        )
         for side in ("home", "away"):
             me, opp, was = _team(now, side), _team(now, _other(side)), _team(before, side)
             was_opp = _team(before, _other(side))
@@ -326,12 +420,30 @@ class TacticsWatcher:
                 found.append(("danger_turnovers", side, _own_half_loss_by(side)))
             if direct_switch(me, opp, was):
                 found.append(("direct_switch", side, _long_pass_by(side)))
+            if block_drop(me, was):
+                found.append(("block_drop", side, _opponent_passes_against(side)))
+            hub = (
+                hub_player(_team(hub_now, side), _team(hub_before, side))
+                if hub_before is not None
+                else None
+            )
+            if hub is not None:
+                found.append(("hub_player", side, _hub_passes(hub)))
+                extra[("hub_player", side)] = (hub_now, hub)
+            if press_escape(me, opp, was):
+                found.append(("press_escape", side, _escape_by(side)))
+            if phys_now is not None and phys_ref is not None and physical_drop(
+                _team(phys_now, side), _team(phys_ref, side)
+            ):
+                found.append(("physical_drop", side, _passes_by(side)))
+                extra[("physical_drop", side)] = (phys_now, None)
         for kind, side, pred in sorted(found, key=lambda f: -SIGNIFICANCE[f[0]]):
             if minute - self._last.get((kind, side), -99) < COOLDOWN_MIN[kind]:
                 continue
             self._last[(kind, side)] = minute
             self._last_any = minute
             w = shape_now if kind == "shape_change" else now
+            w, player = extra.get((kind, side), (w, None))
             return [
                 InsightCandidate(
                     id=self._new_id(),
@@ -340,6 +452,7 @@ class TacticsWatcher:
                     t=min((minute + 1) * 60.0, now_t),  # the last minute closes at full time
                     significance=SIGNIFICANCE[kind],
                     side=side,
+                    player_id=player,
                     window=(w.start_minute, w.end_minute),
                     evidence=_events_in(state, w, pred) or _events_in(state, w, _passes_by(side)),
                 )

@@ -197,9 +197,10 @@ GOOD_FOR_TEAM = frozenset(
         "zone_damage",
         "momentum_swing",
         "state_shift",
+        "press_escape",
     }
 )
-BAD_FOR_TEAM = frozenset({"danger_turnovers", "lines_stretched"})
+BAD_FOR_TEAM = frozenset({"danger_turnovers", "lines_stretched", "block_drop", "physical_drop"})
 
 
 def situation(kind: str, goals_for: int, goals_against: int) -> str | None:

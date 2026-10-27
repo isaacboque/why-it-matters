@@ -19,6 +19,7 @@ from functools import cache, lru_cache
 from pathlib import Path
 
 import pytest
+from depth_indep import DepthTally
 
 from whyitmatters.agents import run_match
 from whyitmatters.agents.models import Viewer
@@ -361,6 +362,26 @@ def tally(seed: int) -> Tally:
     return Tally(played(seed)[0].events)
 
 
+@cache
+def depth_tally(seed: int) -> DepthTally:
+    """Pressing, chances, hub and physical metrics (tests/depth_indep.py)."""
+    meta = played(seed)[0].meta
+    roster = {"home": [p.id for p in meta.home.players], "away": [p.id for p in meta.away.players]}
+    return DepthTally(played(seed)[0].events, roster)
+
+
+DEPTH_METRICS = {
+    "press_wins", "regains", "regains_wide_share", "press_escapes_short", "press_escapes_long",
+    "press_escapes", "press_escape_rate", "big_chances", "xg_per_shot", "finishing",
+    "shots_cutback", "shots_cross", "shots_through", "shots_long", "hub_share",
+    "distance_per_min", "sprints", "high_speed_runs", "top_speed_kmh",
+}  # fmt: skip
+DEPTH_EDGE = {  # these go through the line and reception rules, so float edges may apply
+    "press_escapes_short", "press_escapes_long", "press_escapes", "press_escape_rate",
+    "shots_through",
+}
+
+
 # tolerance = half a unit of the last decimal production rounds to
 TOL = {
     "possession_share": 6e-4, "pass_completion": 6e-4, "field_tilt": 6e-4,
@@ -587,6 +608,15 @@ def indep_claim(seed: int, c):
         if c.metric == "turnovers_per_min":
             return w["turnovers_per_min"]
         return w[c.side].get(c.metric)
+    if c.metric in DEPTH_METRICS or c.metric in ("press_success", "player_involvement"):
+        lo, hi = c.window
+        w = depth_tally(seed).window(lo, hi)[c.side]
+        if c.metric == "press_success":
+            n = t.window(lo, hi)[c.side]["pressures"]
+            return w["press_wins"] / n if n else 0.0
+        if c.metric == "player_involvement":
+            return w["involvement"].get(c.player_id)
+        return w[c.metric]
     if c.metric == "window_minutes":
         return float(c.window[1] - c.window[0] + 1)
     if c.metric == "team_xg":
@@ -649,6 +679,9 @@ def test_every_verifier_claim_equals_independent_value(seed):
         if ind is None or abs(ind - c.value) > c.tolerance + 1e-6 + (
             tally(seed).window(*c.window)[c.side]["edge"]
             if c.metric in DAMAGE_METRICS and c.window else 0
+        ) + (
+            depth_tally(seed).window(*c.window)[c.side]["edge"]
+            if c.metric in DEPTH_EDGE and c.window else 0
         ):
             bad.append(f"{c.metric} {c.key} stated {c.value}, independent {ind}")
     assert not bad, "; ".join(bad[:8])

@@ -26,6 +26,10 @@ ON_SCREEN_SECONDS = {
     "shape_change": 15.0,
     "lines_stretched": 15.0,
     "most_dangerous_pass": 12.0,
+    "block_drop": 15.0,
+    "hub_player": 12.0,
+    "press_escape": 15.0,
+    "physical_drop": 15.0,
 }
 MIN_SIGNIFICANCE = 0.3
 MAX_DELAY_S = 90.0  # an insight that cannot air within this long of happening is stale

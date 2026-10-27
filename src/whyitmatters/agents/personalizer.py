@@ -23,6 +23,10 @@ TACTICAL = {
     "momentum_swing",
     "shape_change",
     "lines_stretched",
+    "block_drop",
+    "hub_player",
+    "press_escape",
+    "physical_drop",
 }
 MODE_KINDS = {
     "analyst": {"goal", "state_shift", "big_chance", "top_speed", "pass_master"}

@@ -1,6 +1,6 @@
 # Methods sheet
 
-Every number WhyItMatters puts on screen comes from one of the methods below. For each one this sheet gives the formula, our parameters, where the definition comes from, the test that pins it down and how it is validated. Data format and calibration are in [DATA.md](DATA.md); the independent recomputation of every displayed number is in [STATS-AUDIT.md](STATS-AUDIT.md).
+Every number WhyItMatters puts on screen comes from one of the methods below. For each one this sheet gives the formula, our parameters, where the definition comes from, the test that pins it down and how it is validated. Data format and calibration are in [DATA.md](DATA.md); the independent recomputation of every displayed number is in [STATS-AUDIT.md](STATS-AUDIT.md). The wording of every metric, in two depths and three languages, is in [METRICS.md](METRICS.md).
 
 ## How we know it's right
 
@@ -96,7 +96,7 @@ Rates per team per match on simulator seeds 0-19 (about 360 completed passes per
 
 ## Damage and shape insights
 
-The Tactics agent compares the last 5 minutes with the 5 before (`agents/tactics.py`). Thresholds were set on seeds 0-39; one tactical insight at most every 6 minutes, with a per-kind cooldown.
+The Tactics agent compares the last 5 minutes with the 5 before (`agents/tactics.py`). Thresholds were set on seeds 0-39; one tactical insight at most every 6 minutes, with a per-kind cooldown (25 / 30 / 20 / 30 minutes for the four depth kinds).
 
 | Insight | Fires when | Claims the Verifier checks |
 | --- | --- | --- |
@@ -106,8 +106,43 @@ The Tactics agent compares the last 5 minutes with the 5 before (`agents/tactics
 | Change of shape | the in-possession formation over the last 8 minutes differs from the 8 before, and the windows ending 2 minutes earlier agree with each reading | formation now and before |
 | Stretched lines | out of possession, the gap between back line and midfield ≥ 16.5 m and ≥ 3 m wider than before, with the team ≥ 33 m long | gap now and before |
 | The pass that broke it open | a completed pass adds ≥ 0.09 xT and bypasses ≥ 3 opponents | xT added, opponents bypassed |
+| Dropping deep (`block_drop`) | out of possession, the back line is ≥ 14 m deeper than in the window before | back-line height now and before |
+| Pass hub (`hub_player`) | over 10 minutes one player made or received ≥ 55 % of the team's completed passes, ≥ 12 points more than the next player and ≥ 10 points more than he did in the 10 minutes before | the player's share of completed passes |
+| Beating the press (`press_escape`) | ≥ 7 build-up passes beat the first line, ≥ 35 % of build-up passes (after ≤ 27 %), against an opponent allowing ≤ 9 passes per defensive action | escapes, escape rate, the opponent's PPDA |
+| Tiring legs (`physical_drop`) | from minute 54, the last 10 minutes cover ≥ 20 % less ground per player per minute than the same team in minutes 15-29 | distance per player per minute now and in the reference |
 
 **Validation.** Shape changes are planted by the simulator, so they can be checked: 0.84 of reported changes (43/51) match a scripted change of shape in possession on held-out seeds 1000-1019. Stretched lines fall inside a scripted broken (chaos) spell, where the simulator opens the gap to 17 m, in 0.77 of cases (10/13). Tests: `tests/test_damage.py::test_shape_changes_match_the_planted_shapes` and `tests/test_damage.py::test_stretched_lines_come_from_broken_games`.
+
+## Pressing and defending, chances, pass network, physical
+
+Computed from the event log and its freeze frames, per team and window (`pulse/metrics.py`, `pulse/chances.py`, `pulse/physical.py`). Every one of them is a window metric the Verifier recomputes and `tests/depth_indep.py` recounts independently (see [STATS-AUDIT.md](STATS-AUDIT.md)). The wording shown to viewers, in two depths and three languages, is in [METRICS.md](METRICS.md).
+
+| Metric | Formula and parameters | Source | Test |
+| --- | --- | --- | --- |
+| Successful press (`press_wins`, `press_success`) | a pressure event by a team followed within 5 s by that team winning the ball (tackle won or interception); one win per press; `press_success` = wins / pressures | ours | `tests/test_depth.py::test_a_press_wins_when_the_ball_is_won_within_five_seconds` |
+| Wide regains (`regains`, `regains_wide_share`) | ball wins, and the share made in the outer thirds of the width: a pressing trap pushes the opponent to the touchline | ours | `tests/test_depth.py::test_regains_in_the_outer_thirds_are_wide` |
+| Press escapes (`press_escapes_short`, `press_escapes_long`, `press_escape_rate`) | completed build-up passes (start x <= 63) that beat the first line of the press: they break the opponent's forward line or are received between forwards and midfield (`between_fwd_mid`), i.e. short; or, if not, travel 30 m or more, i.e. long. Rate = escapes / build-up passes | ours, built on the per-line rules of the Damage section | `tests/test_depth.py::test_escapes_beat_the_first_line_or_go_long_over_it` |
+| Big chances, xG per shot, finishing | big chance: xG >= 0.3 (as above); xG per shot = xG / shots; finishing = goals - xG | standard | `tests/test_depth.py::test_window_counts_big_chances_shot_kinds_and_finishing` |
+| Shot kinds (`shots_cutback`, `shots_cross`, `shots_through`, `shots_long`) | read from the completed pass right before the shot to the shooter. Cut-back: starts at x >= 94 in a wide lane, ends in the box at least 3 m further back. Cross: starts in a wide lane of the final third, ends in the box. Through ball: breaks the opponent's back line. Long shot: none of these and the shot is 25 m or more from goal | ours; wide = outside the middle third of the width | `tests/test_depth.py::test_shot_kinds_come_from_the_pass_before` |
+| Hub (`hub_share`, `player_involvement`) | a player's involvement = completed passes he made or received / the team's completed passes in the window (the shares of a team add up to 2). The hub is the player with the largest share | **simplified.** A pass-network hub is usually found by betweenness; we use involvement, which is what a viewer reads from the network and is recomputable from the log | `tests/test_depth.py::test_involvement_counts_passes_made_and_received` |
+| Distance, high-speed runs, sprints, top speed (`distance_per_min`, `high_speed_runs`, `sprints`, `top_speed_kmh`) | see below | ours; the 25 km/h sprint threshold is the hackathon rules' | `tests/test_depth.py::test_physical_legs_are_checkpoint_distances_and_speeds` |
+
+**Physical figures are not tracking data.** Freeze frames exist only at ball events, so each team keeps a checkpoint (its frame at the last event at least 4 s ago). At the next event 4-15 s after the checkpoint, in the same half and without a kick-off in between, every outfield player is credited the straight-line distance between the two frames and an average speed over the interval. A player who is the actor of an event in between is left out of that leg, because the simulator places him exactly on the ball. Distance is metres per outfield player per minute; a high-speed run is a leg at 20 km/h or more, a sprint a leg at 25 km/h or more, top speed the fastest leg. Straight lines between checkpoints undercount the real path (about 85 m per player per minute on seeds 0-19), so the numbers compare teams, windows and minutes of the same match, not providers. No external benchmark is cited.
+
+**Planted ground truth.** From minute 60 the simulator makes each team close less of the distance to its target between frames, down to 14-34 % less at full time depending on the club (pressing clubs tire most, `simulator/positions.py::FATIGUE_RATE`). The event stream and the random stream are untouched. Players then cover 12 % less ground in minutes 75-89 than in minutes 15-29 (77 against 88 m per player per minute on seeds 0-19), and `tests/test_depth.py::test_the_tiredness_is_planted_in_the_simulator` pins it. Shape detection moved by under two points (formation out of possession 0.735 to 0.718, still above its 0.70 target).
+
+Rates per team per match on simulator seeds 0-19: successful presses 30 of 119 pressures (25 %); 86 ball wins, 72 % of them wide; press escapes 59 (40 through the first line, 19 over it), 26 % of build-up passes; shots 12.4 with 1.35 big chances and 0.12 xG per shot; shot kinds per team per match: cut-back 0.3, cross 1.3, through ball 0.9, long shot 3.5; the hub is involved in 34 % of the team's completed passes over a match; 143 sprints and 370 high-speed runs (legs of 4 s or more); fastest leg 35 km/h. These are simulator rates; no external benchmark is cited.
+
+## Player cards and rating
+
+`pulse/ratings.py`, served by `GET /matches/{seed}/players`. Counts come straight from the log: completed passes and passes received (involvement), progressive passes and carries, line-breaking passes, key passes (the completed pass right before a shot, to the shooter) and xA (xG of that shot), ball wins, lost tackles, xT added, distance, top speed, sprints. The 1-10 rating is a plain sum of visible parts:
+
+```text
+rating = 5.2 + 3.0 x xT added + 0.08 x ball wins + 0.25 x key passes + 2.0 x xA
+         + 0.8 x goals + 1.0 x own xG - 0.03 x incomplete passes - 0.10 x lost tackles     (clipped to 1-10)
+```
+
+The breakdown (xT, defence, creation, finishing, losses) is returned with the rating. The weights were set on seeds 0-19 so the average outfield player lands at 6.3 (standard deviation 0.9) and the best of a match at about 8.7; they are a stated convention, not an external benchmark. Tests: `tests/test_depth.py::test_rating_is_a_plain_sum_of_visible_parts` and, against the independent recount, `test_player_cards_match_the_independent_recount_and_sum_to_the_team`.
 
 ## Freeze frames
 

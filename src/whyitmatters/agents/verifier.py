@@ -64,6 +64,13 @@ class Verifier:
             team = w.home if c.side == "home" else w.away
             value = getattr(team, c.metric)
             return None if value is None else float(value)
+        if c.metric == "player_involvement":
+            if c.window is None or c.side is None or c.player_id is None:
+                return None
+            start, end = c.window
+            w = self._counter(state, end).window(end, end - start + 1)
+            team = w.home if c.side == "home" else w.away
+            return team.involvement.get(c.player_id)
         if c.metric == "window_minutes":
             return float(c.window[1] - c.window[0] + 1) if c.window else None
         if c.metric == "team_xg":
