@@ -94,7 +94,7 @@ flowchart LR
 - **Typed handoffs:** each number travels as a `Claim` (metric, value, window or event, tolerance), so the text can't say anything the data doesn't back.
 - **Microsoft Agent Framework:** the whole pipeline (TacticsWatcher → Explainer → Verifier with retry/drop → Producer → Personalizer) runs as one Agent Framework workflow graph (`agents/workflow.py`), one run per match event. Each agent is an `Executor`, and conditional edges route each draft on the Verifier's verdict. Switch it on with `WIM_ENGINE=agent_framework`, the default in the container. A test proves it gives identical results to the inline loop.
 - **Microsoft Foundry:** a model deployed in Foundry can write the captions in any language, under the same checks ([docs/LLM.md](docs/LLM.md)).
-- **Azure Container Apps:** the app is hosted there with one command from Cloud Shell ([docs/DEPLOY.md](docs/DEPLOY.md)).
+- **Azure Container Apps:** the app is hosted there, running the image GitHub builds (GHCR), deployed with one command from Cloud Shell ([docs/DEPLOY.md](docs/DEPLOY.md)).
 
 ## Microsoft technologies used
 
@@ -152,7 +152,7 @@ pytest
 pip install -e ".[api]" && uvicorn whyitmatters.api:app --port 8000   # then open http://localhost:8000
 ```
 
-or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`. To put it on Azure, see [docs/DEPLOY.md](docs/DEPLOY.md) (one script, run from Azure Cloud Shell).
+or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`. To put it on Azure, see [docs/DEPLOY.md](docs/DEPLOY.md): `bash infra/deploy.sh` deploys the prebuilt GHCR image from Azure Cloud Shell, `bash infra/redeploy.sh` pulls the newest one.
 
 - **Match centre:**
   - scorebug
