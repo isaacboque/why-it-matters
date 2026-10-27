@@ -33,6 +33,10 @@ InsightKind = Literal[
     "shape_change",  # a team changes its shape in possession
     "lines_stretched",  # the gap between a team's back line and midfield opens up
     "most_dangerous_pass",  # one pass adds a lot of threat and takes players out of the game
+    "block_drop",  # a team's back line, out of possession, drops deep
+    "hub_player",  # one player is involved in a big share of a team's completed passes
+    "press_escape",  # a team keeps beating the first line of the press in build-up
+    "physical_drop",  # a team runs clearly less per player than early in the match
 ]
 
 # Metrics a viewer can follow on their own ("My metric" in the Fan tab)
@@ -111,6 +115,31 @@ Metric = Literal[
     # damage, event based
     "pass_xt_added",  # xT added by one completed pass
     "pass_packing",  # opponents one completed pass took out of the game
+    # pressing and defending, window + side (pulse/metrics.py)
+    "press_wins",  # pressures followed within 5 s by winning the ball
+    "press_success",  # press_wins / pressures
+    "regains",  # balls won (tackle won or interception)
+    "regains_wide_share",  # share of those won in the outer thirds of the width
+    "press_escapes_short",  # build-up passes that beat the first line of the press
+    "press_escapes_long",  # build-up passes that go long over it
+    "press_escapes",
+    "press_escape_rate",  # escapes / build-up passes
+    # chances, window + side (pulse/chances.py)
+    "big_chances",
+    "xg_per_shot",
+    "finishing",  # goals minus xG
+    "shots_cutback",
+    "shots_cross",
+    "shots_through",
+    "shots_long",
+    # pass network, window + side (+ player)
+    "hub_share",  # the hub player's share of the team's completed passes
+    "player_involvement",  # one player's share of the team's completed passes (made or received)
+    # physical, window + side (pulse/physical.py)
+    "distance_per_min",  # metres per outfield player per minute
+    "sprints",
+    "high_speed_runs",
+    "top_speed_kmh",
 ]
 
 # Claim metrics read straight off a team's rolling window
@@ -156,6 +185,26 @@ TEAM_WINDOW_METRICS = frozenset(
         "xt_share_left",
         "xt_share_centre",
         "xt_share_right",
+        "press_wins",
+        "press_success",
+        "regains",
+        "regains_wide_share",
+        "press_escapes_short",
+        "press_escapes_long",
+        "press_escapes",
+        "press_escape_rate",
+        "big_chances",
+        "xg_per_shot",
+        "finishing",
+        "shots_cutback",
+        "shots_cross",
+        "shots_through",
+        "shots_long",
+        "hub_share",
+        "distance_per_min",
+        "sprints",
+        "high_speed_runs",
+        "top_speed_kmh",
     }
 )
 

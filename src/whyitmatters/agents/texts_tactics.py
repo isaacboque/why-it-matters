@@ -629,3 +629,14 @@ ADVICE_FOR.update(
         "most_dangerous_pass": "line_breakers",
     }
 )
+
+# Depth insights: pressing, pass network, physical (texts_depth.py)
+from whyitmatters.agents.texts_depth import (  # noqa: E402
+    DEPTH_ADVICE,
+    DEPTH_ADVICE_FOR,
+    DEPTH_TEMPLATES,
+)
+
+TEMPLATES.update(DEPTH_TEMPLATES)
+ADVICE.update(DEPTH_ADVICE)
+ADVICE_FOR.update(DEPTH_ADVICE_FOR)

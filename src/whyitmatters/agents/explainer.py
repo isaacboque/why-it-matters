@@ -11,7 +11,7 @@ from whyitmatters.agents.drivers import DRIVERS, driver_claims, drivers_of
 from whyitmatters.agents.faults import FaultInjector
 from whyitmatters.agents.generator import TemplateGenerator, TextGenerator, render_with_source
 from whyitmatters.agents.models import Claim, Draft, InsightCandidate, Verdict
-from whyitmatters.agents.tactics import damage_lane
+from whyitmatters.agents.tactics import PHYSICAL_REF, damage_lane
 from whyitmatters.agents.texts_tactics import ADVICE_FOR
 from whyitmatters.agents.texts_variants import situation
 from whyitmatters.pulse import damage
@@ -30,6 +30,10 @@ TACTICAL_KINDS = frozenset(
         "momentum_swing",
         "shape_change",
         "lines_stretched",
+        "block_drop",
+        "hub_player",
+        "press_escape",
+        "physical_drop",
     }
 )
 
@@ -55,6 +59,10 @@ TEMPLATE_TAGS: dict[str, tuple[str, ...]] = {
     "shape_change": ("shape",),
     "lines_stretched": ("shape",),
     "most_dangerous_pass": ("threat", "pass_quality"),
+    "block_drop": ("shape",),
+    "hub_player": ("possession", "pass_quality"),
+    "press_escape": ("pressing", "pass_quality"),
+    "physical_drop": ("speed",),
 }
 
 
@@ -441,7 +449,48 @@ class Explainer:
                     window_claim,
                 ],
             )
-        if cand.kind in ("shape_change", "lines_stretched"):
+        if cand.kind == "hub_player":
+            return (
+                "hub_player",
+                slots,
+                [
+                    Claim(
+                        key="share", metric="player_involvement", unit="share", side=side,
+                        player_id=cand.player_id,
+                        value=me.involvement.get(cand.player_id or "", 0.0),
+                        window=win, tolerance=0.006,
+                    ),
+                    window_claim,
+                ],
+            )  # fmt: skip
+        if cand.kind == "press_escape":
+            return (
+                "press_escape",
+                slots,
+                [
+                    claim("esc", "press_escapes", "count", me.press_escapes, side),
+                    claim("rate", "press_escape_rate", "share", me.press_escape_rate, side, 0.006),
+                    claim("ppda", "ppda", "rate", opp.ppda or 0.0, _other(side), 0.06),
+                    window_claim,
+                ],
+            )
+        if cand.kind == "physical_drop":
+            ref_win = PHYSICAL_REF
+            r = state.pulse.counter.window(ref_win[1], ref_win[1] - ref_win[0] + 1)
+            ref = r.home if side == "home" else r.away
+            return (
+                "physical_drop",
+                slots,
+                [
+                    claim("now", "distance_per_min", "metres", me.distance_per_min, side, 0.06),
+                    Claim(
+                        key="was", metric="distance_per_min", unit="metres", side=side,
+                        window=ref_win, value=ref.distance_per_min, tolerance=0.06,
+                    ),
+                    window_claim,
+                ],
+            )  # fmt: skip
+        if cand.kind in ("shape_change", "lines_stretched", "block_drop"):
             size = win[1] - win[0] + 1
             was_win = (win[0] - size, win[1] - size)
             b = state.pulse.counter.window(was_win[1], size)
@@ -449,6 +498,8 @@ class Explainer:
             metric, unit, tol = (
                 ("formation_in", "formation", 0.0)
                 if cand.kind == "shape_change"
+                else ("line_height", "metres", 0.06)
+                if cand.kind == "block_drop"
                 else ("gap_def_mid", "metres", 0.06)
             )
             before = Claim(

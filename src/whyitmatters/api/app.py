@@ -5,6 +5,8 @@
     GET /matches/{seed}/stream        Server-Sent Events replay of the whole match
     GET /matches/{seed}/cues          overlay cue JSON for a graphics partner
     GET /matches/{seed}/personal      the same cues as one viewer sees them, plus the recap
+    GET /matches/{seed}/players       player cards: rating and its breakdown, physical figures
+    GET /glossary                     every metric in two depths, en / es / ca
     GET /eval                         detection quality vs ground truth (the trust panel)
 
 Everything is computed offline from the seed; the stream only paces what is already
@@ -39,6 +41,8 @@ from whyitmatters.eval.__main__ import EVAL_SEED_OFFSET
 from whyitmatters.eval.shape import ShapeScore, score_shapes
 from whyitmatters.pulse import damage
 from whyitmatters.pulse import xt as xt_model
+from whyitmatters.pulse.glossary import CARD_FIELDS, GLOSSARY
+from whyitmatters.pulse.ratings import player_cards
 from whyitmatters.pulse.shape import own_frame
 from whyitmatters.schema import PITCH_LENGTH, PITCH_WIDTH, Event, EventType, Match, MatchMeta, Side
 from whyitmatters.simulator import simulate
@@ -390,6 +394,31 @@ def create_app(env: Mapping[str, str] | None = None, client_factory=None) -> Fas
             recap=orch.recap_for(viewer),
             generator=generator_status,
         )
+
+    @app.get("/matches/{seed}/players", tags=["match"])
+    def players(seed: SeedPath) -> dict[str, Any]:
+        """One card per player over the whole match: the 1-10 rating with its breakdown, passes,
+        xT, key passes, ball wins, distance, top speed and sprints (all recomputable from the
+        event log; see docs/METRICS.md)."""
+        match, _ = load(seed, 0.0)
+        return {"seed": seed, "players": player_cards(match.meta, match.events)}
+
+    @app.get("/glossary", tags=["system"])
+    def glossary() -> dict[str, Any]:
+        """Every metric a number on screen can come from: fan / analyst wording, why it
+        matters, the help text in en / es / ca and the insight kinds that use it."""
+        metrics = {
+            key: {
+                "label": e.label,
+                "fan": e.fan,
+                "analyst": e.analyst,
+                "why": e.why,
+                "help": {"en": e.help_en, "es": e.help_es, "ca": e.help_ca},
+                "kinds": list(e.kinds),
+            }
+            for key, e in GLOSSARY.items()
+        }
+        return {"metrics": metrics, "player_card": {k: v[1] for k, v in CARD_FIELDS.items()}}
 
     @app.get("/eval", response_model=EvalResponse, tags=["system"])
     def evaluation(seeds: int = Query(20, ge=1, le=40)) -> dict[str, float]:

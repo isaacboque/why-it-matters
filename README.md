@@ -133,6 +133,7 @@ This is a prototype on synthetic data. What it would take to run on a real feed,
 - [docs/DATA.md](docs/DATA.md): why the data is synthetic, the exact file format with real example lines, coordinates, ground truth, and a calibration table against public league averages (passes, long balls, goals, accurate passes, shots all within 5 %).
 - [docs/STATS-AUDIT.md](docs/STATS-AUDIT.md): every number on screen recomputed from the raw event log by an independent checker (score, clock, possession, xG, xT, duels, shape, players, every Verifier claim), plus the match distribution against three Premier League seasons.
 - [docs/METHODS.md](docs/METHODS.md): every metric with its formula, parameters, source, the test that pins it and how it is validated, plus "How we know it's right".
+- [docs/METRICS.md](docs/METRICS.md): every metric a number can come from, in two depths (fan and analyst), why it matters, the "?" help text and which insight kinds use it. Served at `GET /glossary`; player cards and ratings at `GET /matches/{seed}/players`.
 
 ## Quick start
 

@@ -89,9 +89,25 @@ def out_shape(label: str, gap: float) -> dict[str, tuple[float, float]]:
 
 
 MAX_SPEED = 8.5  # m/s, how far a player can move towards his target between frames
+# Fatigue: from FATIGUE_FROM_MIN a team without the ball closes less of the distance to its
+# target between frames (small repositioning only), down to 1 - rate at full time. Pressing
+# clubs tire most. Ground truth for the physical_drop insight; the event stream and the random
+# stream are untouched.
+FATIGUE_FROM_MIN = 60.0
+FATIGUE_MAX_MOVE_M = 30.0  # only repositioning up to this far is slowed; a new shape is not
+FATIGUE_RATE = {
+    "HBC": 0.60, "CRB": 0.54, "NBA": 0.40, "ASH": 0.32, "RVM": 0.36, "WHA": 0.36,
+    "KFR": 0.25, "ELW": 0.25,
+}  # fmt: skip
 PERSISTENT_SD = 1.2
 JITTER_SD = 0.8
 DEFENDING_TYPES = {EventType.PRESSURE, EventType.TACKLE, EventType.INTERCEPTION, EventType.FOUL}
+
+
+def fatigue(short_name: str, minute: float) -> float:
+    """Share of the way to its target a team's players get late in the match (1 = fresh)."""
+    late = min(max((minute - FATIGUE_FROM_MIN) / (90.0 - FATIGUE_FROM_MIN), 0.0), 1.0)
+    return 1.0 - FATIGUE_RATE.get(short_name, 0.2) * late
 
 
 def _other(side: Side) -> Side:
@@ -176,6 +192,8 @@ def add_freeze_frames(
             shift = CLUB_IDENTITY[teams[side].short_name].line + game_state(diff, ev.t / 60.0)[3]
             targets = team_targets(teams[side], role, side == holder, ball_own, shift)
             new = []
+            # tired legs show without the ball (in possession the team's shape is what it is)
+            tire = 1.0 if side == holder else fatigue(teams[side].short_name, ev.t / 60.0)
             for i, (tx, ty) in enumerate(targets):
                 ox, oy = offsets[side][i]
                 tx, ty = _to_home(side, tx + ox, ty + oy)
@@ -187,6 +205,8 @@ def add_freeze_frames(
                     dx, dy = tx - prev[0], ty - prev[1]
                     d = math.hypot(dx, dy)
                     k = 1.0 if d <= step else step / d
+                    if d <= FATIGUE_MAX_MOVE_M:  # tired legs slow small moves, not a re-shape
+                        k *= tire
                     nx, ny = prev[0] + dx * k, prev[1] + dy * k
                 nx += rng.gauss(0, JITTER_SD)
                 ny += rng.gauss(0, JITTER_SD)
