@@ -99,8 +99,8 @@ def game_state(diff: int, minute: float) -> tuple[float, float, float, float]:
         return 1.0, 1.0, 1.0, 0.0
     w = max(0.0, min(1.0, (minute - 55.0) / 20.0)) * min(1.0, abs(diff) / 1.5)
     if diff > 0:
-        return 1.0 - 0.30 * w, 1.0 - 0.10 * w, 1.0 + 0.10 * w, -6.0 * w
-    return 1.0 + 0.20 * w, 1.0 + 0.30 * w, 1.0 - 0.08 * w, 5.0 * w
+        return 1.0 - 0.30 * w, 1.0 - 0.10 * w, 1.0 + 0.10 * w, -3.0 * w
+    return 1.0 + 0.20 * w, 1.0 + 0.30 * w, 1.0 - 0.08 * w, 3.0 * w
 
 
 def style_at(
