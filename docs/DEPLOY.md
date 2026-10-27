@@ -38,7 +38,13 @@ Skip this section to run on the offline templates (English, Spanish, Catalan); e
    cd why-it-matters
    ```
 
-3. Only if you did section 2, paste your values (the key is stored as a secret in Azure and never printed):
+3. Use the resource group `rg-wim-se` (Sweden Central):
+
+   ```bash
+   export RG=rg-wim-se
+   ```
+
+   Only if you did section 2, also paste your values (the key is stored as a secret in Azure and never printed):
 
    ```bash
    export AZURE_OPENAI_ENDPOINT="https://<resource>.openai.azure.com/"
@@ -52,7 +58,7 @@ Skip this section to run on the offline templates (English, Spanish, Catalan); e
    bash infra/deploy.sh
    ```
 
-   The script registers the services it needs, builds the image in Azure (no Docker on your side), creates the app, keeps one replica warm, adds the model secret if you set it, and waits until `/health` answers. It ends by printing the URL.
+   The script registers the services it needs, builds the image in Azure (no Docker on your side), creates the app, keeps one replica warm (`--min-replicas 1`, so judges never hit a cold start), adds the model secret if you set it, and waits until `/health` answers. It ends by printing the URL.
 
 ## 4. Check it
 
@@ -79,7 +85,7 @@ cd ~/why-it-matters && git pull && bash infra/deploy.sh
 After 10 November 2026:
 
 ```bash
-az group delete --name rg-whyitmatters --yes
+az group delete --name rg-wim-se --yes
 ```
 
 ## If something fails
@@ -89,5 +95,5 @@ az group delete --name rg-whyitmatters --yes
 | `The subscription is not registered to use namespace` | Run the script again; registration can take a few minutes the first time. |
 | `RequestDisallowedByAzure ... region is currently not accepting new customers` | Some regions refuse new subscriptions. The script defaults to Sweden Central; try `export LOCATION=northeurope` and a fresh group name (`export RG=rg-wim-ne`), because a resource group cannot change region. |
 | `MissingSubscriptionRegistration` or a quota error | Try another region as in the row above. |
-| The page loads but no match starts | Open `<url>/health`. If it does not answer, run `az containerapp logs show -n whyitmatters -g rg-whyitmatters --follow` and look at the last lines. |
+| The page loads but no match starts | Open `<url>/health`. If it does not answer, run `az containerapp logs show -n whyitmatters -g rg-wim-se --follow` and look at the last lines. |
 | Captions stay in English for other languages | The model is not on: check the three `AZURE_OPENAI_*` values and re-run the script. |

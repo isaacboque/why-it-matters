@@ -1,6 +1,25 @@
 # WhyItMatters
 
+[![CI](https://github.com/isaacboque/why-it-matters/actions/workflows/ci.yml/badge.svg)](https://github.com/isaacboque/why-it-matters/actions/workflows/ci.yml)
+
 **Reads the game like a coach, explains it like a pundit, and proves every word.**
+
+## For judges: 60-second tour
+
+| Link | |
+| --- | --- |
+| Live demo (Azure Container Apps) | LIVE_DEMO_URL |
+| Static demo (no backend) | STATIC_DEMO_URL |
+| Demo video | VIDEO_URL |
+
+1. Open the demo, leave Pace on **Live** (or pick **Fast**) and press **Kick off**. Match centre fills with the pitch, xT momentum and the on-air rail.
+2. On any card in the on-air rail, press **Show the proof**: the number stated next to the number recomputed from the raw event log.
+3. Open **Broadcast** to see the same cue as a 16:9 lower third over the live picture.
+4. Open **Trust**, tick **Unreliable model** and kick off again: the Verifier catches wrong numbers before they air, and the claims ledger and rejected drafts show it.
+
+| Match centre | Broadcast | Trust |
+| --- | --- | --- |
+| ![Match centre](docs/img/match-centre.png) | ![Broadcast lower third](docs/img/broadcast.png) | ![Trust control room](docs/img/trust.png) |
 
 WhyItMatters turns a live stream of synthetic, football-realistic match events into explainable match intelligence for studio, broadcast and streaming. A Match Pulse engine tracks control vs chaos, pressing intensity, field tilt and rhythm; a team of agents explains why each shift matters, verifies every claim against the match state, decides what goes on air, and personalizes it for analysts and fans.
 
@@ -74,6 +93,38 @@ flowchart LR
 - **Microsoft Agent Framework:** the draft → verify → retry/publish loop runs as an Agent Framework workflow (`agents/workflow.py`). Each agent is an `Executor`, and conditional edges route each draft on the Verifier's verdict. Switch it on with `WIM_ENGINE=agent_framework`, the default in the container. A test proves it gives identical results to the inline loop.
 - **Microsoft Foundry:** a model deployed in Foundry can write the captions in any language, under the same checks ([docs/LLM.md](docs/LLM.md)).
 - **Azure Container Apps:** the app is hosted there with one command from Cloud Shell ([docs/DEPLOY.md](docs/DEPLOY.md)).
+
+## Microsoft technologies used
+
+Only what is in the code and the deploy scripts today:
+
+| Technology | Where | Judging criteria it serves |
+| --- | --- | --- |
+| Microsoft Agent Framework | The draft, verify, retry/publish loop is a workflow of `Executor`s with conditional edges (`src/whyitmatters/agents/workflow.py`, `WIM_ENGINE=agent_framework`); a test pins it to the inline loop's results | Technical execution, innovation |
+| Microsoft Foundry / Azure OpenAI | Optional caption writer (`WIM_GENERATOR=llm`), guarded by number, name and length checks, retries, template fallback and a per-match cost cap ([docs/LLM.md](docs/LLM.md)) | Innovation, responsible AI |
+| Azure Container Apps | Hosting, one script from Cloud Shell, one replica kept warm ([docs/DEPLOY.md](docs/DEPLOY.md), `infra/deploy.sh`) | Technical execution, real-world applicability |
+| GitHub Actions and GHCR | CI (lint, tests, detection eval gate, Playwright browser tests), image published to GHCR (`.github/workflows/`) | Technical execution |
+
+GitHub Copilot is not used in the shipped code, so it is not listed.
+
+## Path to production
+
+This is a prototype on synthetic data. What it would take to run on a real feed, kept short:
+
+- **Provider adapter.** One function per provider maps its event feed onto our schema (`src/whyitmatters/schema.py`) and nothing downstream changes. An Opta or StatsBomb-style feed needs, per event: `id`, `seq`, `t`, `period`, `minute`, `type`, `side`, `player_id`, `possession_id`, `x`/`y` and `end_x`/`end_y` (converted to the acting team's 105 x 68 m coordinates), `outcome`, `receiver_id`, `under_pressure`, `xg`, `score_home`/`score_away`, plus a `freeze` frame of all 22 players where the provider has tracking (StatsBomb 360 style). Field definitions are in [docs/DATA.md](docs/DATA.md). The adapter itself is not built yet.
+- **Latency per insight.** Measured offline on the replayed log, not on a network: see the Trust tab and the table above. A live feed adds the provider's own delay.
+- **On-air budget.** The Producer allows at most 3 cues per rolling 5 match minutes; goals always air. Tune per broadcaster.
+- **Overlay cue API.** `GET /matches/{seed}/cues` returns timed cues (`t_in`, `t_out`, `priority`, `headline`, `body`, evidence event ids, claims) for a graphics partner; today it is pull-based per match, a push channel would be next.
+- **Audit trail.** Every number on air is a typed claim with its recomputed value; the claims ledger in the Trust tab is that trail. Persisting it per broadcast is not built yet.
+- **Cost guard.** `WIM_LLM_MAX_CALLS` caps model requests per match and everything falls back to offline templates; the default path needs no model at all.
+
+## How to read our numbers
+
+- **Truth Score** is the share of claims that match a recomputation from the raw event log, which the Verifier does independently of the writer. On clean drafts it is 1.00 by construction, so on its own it is weak evidence.
+- **The stronger evidence is the fault-injection test:** with a model that mis-states 30 % of first drafts, raw Truth Score is 0.93 (first-draft accuracy 0.70), every retry recovers, and on-air accuracy is 1.00. That shows the Verifier does the catching. Try it with **Unreliable model**.
+- **Held-out detection metrics** (20 matches the engine was never tuned on) are scored against the known answers the simulator planted: recall 0.87, precision 0.67, timeline accuracy 0.82, lag 5.4 min.
+- **Precision 0.67 vs recall 0.87 is a deliberate trade-off:** the engine prefers to flag a possible shift over missing one, and the Producer budget (3 cues per 5 minutes, significance ranking) then filters what airs.
+- All of this is on synthetic matches; it validates the pipeline, not real-world football accuracy. See [docs/METHODS.md](docs/METHODS.md).
 
 ## Data and methods
 
