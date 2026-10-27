@@ -173,7 +173,9 @@ def _damage(ev: Event) -> dict[str, Any]:
         return out
     out["xt"] = round(xt_model.added(ev.x, ev.y, ev.end_x, ev.end_y), 3)
     if ev.type == EventType.PASS:
-        out["lb"] = damage.lines_broken(ev)
+        roles = damage.lines_broken_roles(ev)
+        out["lb"] = len(roles)
+        out["lbl"] = roles  # which lines: back, midfield, forward
         out["pk"] = damage.packing(ev)
     return out
 

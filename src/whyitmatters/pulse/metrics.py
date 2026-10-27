@@ -121,6 +121,11 @@ class SideMinute:
     line_breaks: int = 0
     packing: int = 0
     between_lines: int = 0
+    line_breaks_back: int = 0
+    line_breaks_mid: int = 0
+    line_breaks_fwd: int = 0
+    between_mid_def: int = 0
+    between_fwd_mid: int = 0
     box_entries: int = 0
     zone14_entries: int = 0
     halfspace_entries: int = 0
@@ -174,6 +179,11 @@ class TeamWindow(BaseModel):
     line_breaks: int = 0
     packing: int = 0
     between_lines: int = 0
+    line_breaks_back: int = 0
+    line_breaks_mid: int = 0
+    line_breaks_fwd: int = 0
+    between_mid_def: int = 0
+    between_fwd_mid: int = 0
     box_entries: int = 0
     zone14_entries: int = 0
     halfspace_entries: int = 0
@@ -249,10 +259,17 @@ class MinuteCounter:
             s.zone14_entries += z14
             s.halfspace_entries += half
             if ev.type == EventType.PASS:
-                if damage.lines_broken(ev):
+                roles = damage.lines_broken_roles(ev)
+                if roles:
                     s.line_breaks += 1
+                s.line_breaks_back += "back" in roles
+                s.line_breaks_mid += "midfield" in roles
+                s.line_breaks_fwd += "forward" in roles
                 s.packing += damage.packing(ev)
-                s.between_lines += damage.between_lines(ev)
+                gaps = damage.reception_gaps(ev)
+                s.between_lines += bool(gaps)
+                s.between_mid_def += "mid_def" in gaps
+                s.between_fwd_mid += "fwd_mid" in gaps
                 if added > s.best_pass_xt:
                     s.best_pass_xt, s.best_pass_id = added, ev.id
         if ev.type == EventType.KICK_OFF:
@@ -379,6 +396,11 @@ class MinuteCounter:
                     "line_breaks",
                     "packing",
                     "between_lines",
+                    "line_breaks_back",
+                    "line_breaks_mid",
+                    "line_breaks_fwd",
+                    "between_mid_def",
+                    "between_fwd_mid",
                     "box_entries",
                     "zone14_entries",
                     "halfspace_entries",
@@ -418,6 +440,11 @@ class MinuteCounter:
                 line_breaks=me.line_breaks,
                 packing=me.packing,
                 between_lines=me.between_lines,
+                line_breaks_back=me.line_breaks_back,
+                line_breaks_mid=me.line_breaks_mid,
+                line_breaks_fwd=me.line_breaks_fwd,
+                between_mid_def=me.between_mid_def,
+                between_fwd_mid=me.between_fwd_mid,
                 box_entries=me.box_entries,
                 zone14_entries=me.zone14_entries,
                 halfspace_entries=me.halfspace_entries,
