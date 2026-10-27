@@ -80,6 +80,9 @@ const KINDS = {
 
 const S = {};
 let es = null;
+let startSeq = 0;      // bumps on every Kick off: late answers from an older start are ignored
+let gotRecord = false; // true once the current match has delivered its first record
+let seedNote = "";     // the standing note about the seed (clamped, or not recorded)
 let STATIC = false; // no backend: replay the pre-recorded files under data/
 let MANIFEST = null; // data/index.json
 let replayToken = 0;
@@ -162,9 +165,25 @@ const handlers = {
     showRecap();
   },
 };
+// A one-line status above the views: "Preparing match…", a clamped seed, a missing recording.
+function setNote(msg) {
+  const n = $("start-notice");
+  n.textContent = msg || "";
+  n.hidden = !msg;
+}
+function closeDialogs() {
+  for (const id of ["recap", "why"]) { const d = $(id); if (d.open) d.close(); }
+}
+function showStartError(msg) {
+  S.ended = true;
+  setNote(seedNote);
+  $("rail").innerHTML = `<div class="empty">${esc(msg)} <button type="button" data-retry>Retry</button></div>`;
+  renderScoreboards();
+}
 function dispatch(type, m) {
   const fn = handlers[type];
   if (!fn) return;
+  if (!gotRecord) { gotRecord = true; setNote(seedNote); }
   if (m.t > S.matchT) S.matchT = m.t;
   fn(m.data, m);
 }
@@ -174,9 +193,11 @@ async function openStaticStream(pace, faults) {
   const token = ++replayToken;
   let feed;
   try {
-    feed = await (await fetch(`data/${S.seed}/stream-${faults ? "faults" : "clean"}.json`)).json();
+    const r = await fetch(`data/${S.seed}/stream-${faults ? "faults" : "clean"}.json`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    feed = await r.json();
   } catch (e) {
-    $("rail").innerHTML = `<div class="empty">Could not load the recording: ${esc(e.message)}</div>`;
+    if (token === replayToken) showStartError(`Could not load the recording (${e.message}).`);
     return;
   }
   if (token !== replayToken) return;
@@ -199,30 +220,61 @@ function openStream() {
   const pace = parseFloat($("pace").value);
   const faults = $("faults").checked ? 0.3 : 0;
   if (STATIC) { openStaticStream(pace, faults); return; }
-  es = new EventSource(`matches/${S.seed}/stream?duration=${pace}&faults=${faults}`);
-  for (const type of Object.keys(handlers)) es.addEventListener(type, (e) => dispatch(type, JSON.parse(e.data)));
-  es.onerror = () => {
+  const mine = es = new EventSource(`matches/${S.seed}/stream?duration=${pace}&faults=${faults}`);
+  for (const type of Object.keys(handlers)) {
+    mine.addEventListener(type, (e) => { if (es === mine) dispatch(type, JSON.parse(e.data)); });
+  }
+  mine.onerror = () => {
     // never let the browser auto-reconnect: that would replay the match from the start
-    es.close();
-    if (!S.ended) S.ended = true;
-    renderScoreboards();
+    mine.close();
+    if (es !== mine || S.ended) return;
+    if (!gotRecord) showStartError("The match stream failed before it started.");
+    else { S.ended = true; renderScoreboards(); }
   };
 }
 
+// The seed box: empty, negative, too large or not a number never leaves a blank screen.
+let pendingSeed = null; // ?seed=N from the address bar, used once by the first Kick off
+function readSeed() {
+  const raw = (pendingSeed ?? $("seed").value).trim();
+  pendingSeed = null;
+  const n = Number(raw);
+  if (STATIC) {
+    const ok = MANIFEST.seeds[raw];
+    if (ok) return { seed: +raw, note: "" };
+    const first = +Object.keys(MANIFEST.seeds)[0];
+    return { seed: first, note: `Match ${raw || "?"} is not in the recorded set (${Object.keys(MANIFEST.seeds).join(", ")}); showing ${first}.` };
+  }
+  if (raw === "" || !Number.isFinite(n)) return { seed: 7, note: `"${raw}" is not a match number; showing match 7.` };
+  const seed = Math.max(0, Math.min(100000, Math.round(n)));
+  return { seed, note: seed === n ? "" : `Match numbers run from 0 to 100000; showing match ${seed}.` };
+}
+
 async function start() {
+  const mine = ++startSeq;
   if (es) es.close();
+  es = null;
   replayToken++;
+  personalToken++;
+  closeDialogs();
   const keep = S.viewer;
   reset();
   S.viewer = keep;
-  S.seed = Math.max(0, Math.min(100000, parseInt($("seed").value, 10) || 0));
-  if (STATIC && !MANIFEST.seeds[S.seed]) S.seed = +Object.keys(MANIFEST.seeds)[0];
+  gotRecord = false;
+  const picked = readSeed();
+  S.seed = picked.seed;
+  seedNote = picked.note;
   $("seed").value = S.seed;
-  $("recap").close?.();
+  setNote(`${seedNote} Preparing match…`.trim());
+  renderRail();
   try {
-    S.info = await (await fetch(STATIC ? `data/${S.seed}/info.json` : `matches/${S.seed}`)).json();
+    const r = await fetch(STATIC ? `data/${S.seed}/info.json` : `matches/${S.seed}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const info = await r.json();
+    if (mine !== startSeq) return; // a newer Kick off took over while this one was loading
+    S.info = info;
   } catch (e) {
-    $("rail").innerHTML = `<div class="empty">Could not load the match: ${esc(e.message)}</div>`;
+    if (mine === startSeq) showStartError(`Could not load the match (${e.message}).`);
     return;
   }
   buildSelectors();
@@ -444,7 +496,15 @@ function openWhy(id) {
 document.addEventListener("click", (e) => {
   const d = e.target.closest("[data-close]");
   if (d) d.closest("dialog").close();
+  if (e.target.closest("[data-retry]")) start();
+  if (e.target === $("why")) $("why").close(); // a click on the backdrop
 });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("recap").open) $("recap").close(); // non-modal dialogs ignore Esc on their own
+});
+// Changing the match or the pace leaves the old recap behind; both apply on the next Kick off.
+for (const id of ["pace", "faults"]) $(id).addEventListener("change", () => $("recap").close());
+$("seed").addEventListener("change", () => $("recap").close());
 
 // ----------------------------------------------------------------------------- fan view
 const MODES = ["fan", "player_focus", "analyst", "coach"];
@@ -612,7 +672,8 @@ function showRecap() {
     <p>${esc(r.summary)}</p>
     <h2>${esc(t.moments)}</h2>
     <ol>${r.moments.map((m) => `<li><b>${m.minute}'</b> ${esc(m.headline)}<br><span class="legend">${esc(m.body)}</span></li>`).join("")}</ol>`;
-  if (!$("recap").open) $("recap").showModal();
+  // non-modal: the header controls stay clickable while the recap is open
+  if (!$("recap").open) $("recap").show();
 }
 
 // ----------------------------------------------------------------------------- canvases
@@ -1053,6 +1114,9 @@ function enableStaticUi() {
     .map(([s, m]) => `<option value="${esc(s)}">${esc(s)} · ${esc(m.home)} v ${esc(m.away)}</option>`).join("");
   $("seed").replaceWith(sel);
   sel.addEventListener("change", start);
+  sel.addEventListener("change", () => $("recap").close());
+  const label = sel.closest("label");
+  if (label && label.firstChild) label.firstChild.textContent = "Recorded matches ";
   document.querySelector("footer").insertAdjacentHTML("afterbegin",
     "<b>Static demo:</b> pre-recorded matches replayed in your browser, no server involved. ");
 }
@@ -1063,6 +1127,8 @@ async function boot() {
     if (!MANIFEST) { $("rail").innerHTML = `<div class="empty">No backend and no pre-recorded data found.</div>`; return; }
     enableStaticUi();
   }
+  const wanted = new URLSearchParams(location.search).get("seed");
+  if (wanted !== null) pendingSeed = wanted;
   start();
 }
 boot();

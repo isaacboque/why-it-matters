@@ -383,3 +383,16 @@ table.ledger td.what { white-space: normal; max-width: 260px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------------------------------------------------------------- recap: non-modal, never covers the controls */
+dialog#recap {
+  position: fixed; inset: auto 20px 20px auto; margin: 0; z-index: 20;
+  width: min(440px, calc(100vw - 40px)); max-width: none;
+  box-shadow: 0 18px 48px -12px rgba(0, 0, 0, 0.6);
+}
+dialog#recap .inner { max-height: min(60vh, 560px); }
+@media (max-width: 480px) {
+  dialog#recap { inset: auto 0 0 0; width: 100%; border-radius: 14px 14px 0 0; }
+  dialog#recap .inner { max-height: 55vh; padding-bottom: 28px; }
+  dialog#recap .close { min-height: 40px; }
+}

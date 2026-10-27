@@ -22,6 +22,8 @@ def _sse(client, url):
         body = "".join(r.iter_text())
     out = []
     for block in body.strip().split("\n\n"):
+        if block.startswith(":"):  # SSE comment (open / keep-alive)
+            continue
         lines = dict(line.split(": ", 1) for line in block.split("\n"))
         out.append((lines["event"], json.loads(lines["data"])))
     return out
@@ -185,3 +187,35 @@ def test_personal_coach_mode_and_my_metric(client):
         assert r.status_code == 200
         assert all(c["kind"] == "goal" or metric in c["tags"] for c in r.json()["cues"])
     assert client.get(f"/matches/{SEED}/personal?metric=nonsense").status_code == 422
+
+
+def test_stream_opens_with_a_comment_and_stays_proxy_friendly(client):
+    with client.stream("GET", f"/matches/{SEED}/stream?duration=0") as r:
+        assert r.headers["cache-control"] == "no-cache"
+        assert r.headers["x-accel-buffering"] == "no"
+        body = "".join(r.iter_text())
+    assert body.startswith(": open\n\n")
+
+
+def test_cold_match_is_simulated_once_under_concurrency():
+    import importlib
+    import threading
+    from unittest import mock
+
+    api = importlib.import_module("whyitmatters.api.app")  # the package re-exports `app`
+
+    calls = []
+    real = api.simulate
+
+    def counting(seed):
+        calls.append(seed)
+        return real(seed)
+
+    with mock.patch.object(api, "simulate", counting):
+        c = TestClient(create_app())
+        threads = [threading.Thread(target=lambda: c.get("/matches/4242")) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    assert calls == [4242]
