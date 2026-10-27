@@ -53,10 +53,13 @@ const METRICS = {
   xt: "Expected threat (xT)", formation_in: "Shape in possession", formation_out: "Shape out of possession",
   gap_def_mid: "Gap, defence to midfield", team_length: "Team length", line_height: "Back-line height",
   line_breaks: "Line-breaking passes", packing: "Opponents bypassed", between_lines: "Received between the lines",
+  line_breaks_back: "Passes beating the defence", line_breaks_mid: "Passes beating midfield", line_breaks_fwd: "Passes beating the forward line",
+  between_mid_def: "Received between midfield and defence", between_fwd_mid: "Received between forwards and midfield",
   box_entries: "Box entries", zone14_entries: "Zone 14 entries", halfspace_entries: "Half-space entries",
   xt_share_left: "Threat down the left", xt_share_centre: "Threat through the middle", xt_share_right: "Threat down the right",
   pass_xt_added: "xT added by the pass", pass_packing: "Opponents the pass bypassed",
 };
+const LINE_NAMES = { back: "defence", midfield: "midfield", forward: "forwards" };
 const UNITS = {
   possession_share: "share", pass_completion: "share", field_tilt: "share", turnovers_per_min: "rate",
   window_minutes: "minutes", shot_xg: "xg", team_xg: "xg", score_home: "count", score_away: "count",
@@ -68,6 +71,7 @@ const UNITS = {
   counter_press_in_move: "count", long_balls_in_move: "count",
   xt: "xg", formation_in: "formation", formation_out: "formation", gap_def_mid: "metres", team_length: "metres",
   line_height: "metres", line_breaks: "count", packing: "count", between_lines: "count", box_entries: "count",
+  line_breaks_back: "count", line_breaks_mid: "count", line_breaks_fwd: "count", between_mid_def: "count", between_fwd_mid: "count",
   zone14_entries: "count", halfspace_entries: "count", xt_share_left: "share", xt_share_centre: "share",
   xt_share_right: "share", pass_xt_added: "xg", pass_packing: "count",
 };
@@ -399,8 +403,8 @@ const H2H = [
   ["xG", "xg", "xg", "Expected goals: how many goals the chances were worth, from where each shot was taken."],
   ["Expected threat (xT)", "xt", "xg", "How much closer to scoring each team moved the ball with passes and carries."],
   ["Shots", "shots", "count", "Shots on, off and blocked."],
-  ["Line-breaking passes", "line_breaks", "count", "Completed passes that went past at least one line of opponents."],
-  ["Received between the lines", "between_lines", "count", "Passes received in the space between the opponent's defence and midfield."],
+  ["Line-breaking passes", "line_breaks", "count", "Completed passes that crossed a line of opponents through its span, not round the side."],
+  ["Received between the lines", "between_lines", "count", "Passes received in the space between any two lines of the opponent, at least 3 m from every opponent."],
   ["Box entries", "box_entries", "count", "Passes and carries that reached the penalty area."],
   ["Progressive passes", "progressive_passes", "count", "Completed passes that moved the ball at least 10 m towards goal."],
   ["High recoveries", "high_recoveries", "count", "Times the ball was won back in the opponent's half."],
@@ -477,7 +481,7 @@ function openWhy(id) {
       <td class="${k.ok ? "ok" : "bad"}">${k.ok ? "✓" : "✗"}</td></tr>`).join("");
   const evidence = w.evidence.map((ev) => `<tr><td><code>${esc(ev.id)}</code></td><td>${Math.floor(ev.t / 60)}'</td>
       <td>${esc(ev.type)}</td><td>${esc(ev.player || teamName(ev.side))}</td>
-      <td>${esc(ev.outcome || "")}${ev.xg != null ? ` · ${ev.xg.toFixed(2)} xG` : ""}</td></tr>`).join("");
+      <td>${esc(ev.outcome || "")}${ev.xg != null ? ` · ${ev.xg.toFixed(2)} xG` : ""}${ev.lbl && ev.lbl.length ? ` · beat ${esc(ev.lbl.map((l) => LINE_NAMES[l] || l).join(" + "))}` : ""}</td></tr>`).join("");
   const history = w.history.map((h) => `<li>Draft ${h.attempt}: ${h.ok
       ? '<b style="color:var(--ok-ink)">verified</b>'
       : `<b style="color:var(--bad)">rejected</b> — ${esc(failureList(h))}`}</li>`).join("");
@@ -824,7 +828,7 @@ const LAYERS = {
   },
   passes: {
     caption: () => S.hurt.length
-      ? `The ${S.hurt.length} completed passes that added the most expected threat so far. Thicker = more dangerous. A ring at the start means the pass went past at least one line of opponents.`
+      ? `The ${S.hurt.length} completed passes that added the most expected threat so far. Thicker = more dangerous. A ring at the start means the pass beat a line of opponents; the label says which.`
       : "The most dangerous passes appear here as the game goes on.",
     legend: () => `<span><span class="swatch home"></span>${esc(teamShort("home"))}</span><span><span class="swatch away"></span>${esc(teamShort("away"))}</span><span>labels: passer and xT added</span>`,
     draw(ctx, sx, sy, dpr) {
@@ -843,7 +847,13 @@ const LAYERS = {
       top.slice(0, 4).forEach((ev) => {
         const [x2, y2] = abs(ev.side, ev.end_x, ev.end_y);
         ctx.fillStyle = "#fff"; ctx.textAlign = x2 > 80 ? "right" : "left";
-        ctx.fillText(`${surname(ev.player_id)} +${ev.xt.toFixed(2)}`, x2 * sx + (x2 > 80 ? -8 : 8) * dpr, y2 * sy - 6 * dpr);
+        const lx = x2 * sx + (x2 > 80 ? -8 : 8) * dpr;
+        ctx.fillText(`${surname(ev.player_id)} +${ev.xt.toFixed(2)}`, lx, y2 * sy - 6 * dpr);
+        if (ev.lbl && ev.lbl.length) { // which lines the pass beat
+          ctx.font = `500 ${10 * dpr}px "IBM Plex Sans", sans-serif`; ctx.globalAlpha = 0.85;
+          ctx.fillText(`beat ${ev.lbl.map((l) => LINE_NAMES[l] || l).join(" + ")}`, lx, y2 * sy + 8 * dpr);
+          ctx.globalAlpha = 1; ctx.font = `600 ${11 * dpr}px "IBM Plex Sans", sans-serif`;
+        }
       });
     },
   },
