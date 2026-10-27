@@ -215,6 +215,8 @@ canvas { width: 100%; display: block; border-radius: 6px; }
 .rail .more { align-self: center; }
 .cue button { min-height: 30px; padding: 2px 12px; font-size: 13px; }
 .tag { font-size: 12px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line-strong); }
+.tag.writer.template, .tag.writer.other { color: var(--muted, inherit); }
+.tag.writer.model { color: var(--ok-ink); border-color: currentColor; } .tag.writer.template_fallback { color: var(--bad); border-color: currentColor; }
 .tag.ok { color: var(--ok-ink); border-color: currentColor; } .tag.bad { color: var(--bad); border-color: currentColor; }
 @keyframes pop { from { transform: translateY(-4px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .cue { animation: none; } }

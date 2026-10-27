@@ -535,7 +535,8 @@ function renderRail() {
       <div class="meta"><span class="min">${c.minute}'</span>
         <span class="kind">${esc(KINDS[c.kind] || c.kind)}</span>
         <span class="${c.why.verified ? "ok" : "bad"}">${c.why.verified ? "✓ verified" : "unverified"}</span>
-        ${c.why.attempts > 1 ? `<span class="bad">${c.why.attempts} drafts</span>` : ""}</div>
+        ${c.why.attempts > 1 ? `<span class="bad">${c.why.attempts} drafts</span>` : ""}
+        ${writerChip(c.slots && c.slots.written_by)}</div>
       <h3>${esc(c.headline)}</h3><p>${esc(c.body)}</p>
       <button data-why="${esc(c.cue_id)}">Show the proof</button>
     </article>`).join("") + more;
@@ -569,7 +570,7 @@ function openWhy(id) {
     <h2>Key events in this window</h2>
     <table><tr><th>Event</th><th>Min</th><th>Type</th><th>Who</th><th>Result</th></tr>${evidence}</table>
     <h2>Drafting</h2><ul>${history}</ul>
-    <p class="legend">Written by: ${esc(WRITTEN_BY[c.slots && c.slots.written_by] || "template")} · Recomputed from the raw event stream · ${w.attempts} draft${w.attempts > 1 ? "s" : ""} · ${w.latency_ms.toFixed(1)} ms to verify and publish · on screen ${clock(c.t_in)}–${clock(c.t_out)}</p>`;
+    <p class="legend">Written by: ${esc(WRITTEN_BY[writtenKey(c.slots && c.slots.written_by)])} · Recomputed from the raw event stream · ${w.attempts} draft${w.attempts > 1 ? "s" : ""} · ${w.latency_ms.toFixed(1)} ms to verify and publish · on screen ${clock(c.t_in)}–${clock(c.t_out)}</p>`;
   $("why").showModal();
 }
 document.addEventListener("click", (e) => {
@@ -648,7 +649,13 @@ function onViewerChange() {
 }
 ["f-lang", "f-lang-other", "f-mode", "f-club", "f-player", "f-metric"].forEach((id) => $(id).addEventListener("change", onViewerChange));
 
-const WRITTEN_BY = { model: "model", template: "template", template_fallback: "template fallback", other: "custom" };
+const WRITTEN_BY = { model: "Foundry model", template: "Template", template_fallback: "Template fallback", other: "Custom writer" };
+const writtenKey = (w) => (w === "model" || w === "template_fallback" ? w : w && w !== "template" ? "other" : "template");
+function writerChip(w) {
+  const k = writtenKey(w);
+  const tip = { model: "Written by the Foundry model, checked by the Verifier before airing", template_fallback: "The model's text was rejected, so the offline template wrote this", template: "Written by the offline template writer", other: "Written by a custom writer" }[k];
+  return `<span class="tag writer ${k}" data-writer="${k}" title="${tip}">${k === "model" ? "Written by " : ""}${WRITTEN_BY[k]}</span>`;
+}
 function renderFan() {
   const el = $("fan-feed");
   const t = T();
@@ -667,8 +674,7 @@ function renderFan() {
       <div class="meta"><span class="min">${c.minute}'</span>
         ${c.for_you ? `<span class="tag ok">${esc(t.foryou)}</span>` : ""}
         <span class="tag">${esc(t.verified)}</span>
-        ${c.written_by === "model" ? `<span class="tag ok" title="written by the model, checked before airing">model</span>` : ""}
-        ${c.written_by === "template_fallback" ? `<span class="tag bad" title="the model's text was rejected">template fallback</span>` : ""}</div>
+        ${writerChip(c.written_by)}</div>
       <h3>${esc(c.headline)}</h3><p>${esc(c.body)}</p></article>`).join("");
 }
 
@@ -700,7 +706,7 @@ function renderTrust() {
     stat("On-air accuracy", pct(tr.on_air_accuracy ?? 1), "audited against the final match state", true),
     stat("Claims rejected", tr.claims_rejected, "caught before air"),
     stat("Retried drafts", tr.retries, `first-draft accuracy ${pct(tr.first_draft_accuracy)}`),
-    stat("Written by", `${tr.written_by_model ?? 0} model`,
+    stat("Writers", `${tr.written_by_model ?? 0} model`,
       `${tr.written_by_fallback ?? 0} template fallback · ${tr.written_by_template ?? 0} template`),
     stat("Insight latency", `${tr.latency_ms_mean.toFixed(1)} ms`, `p95 ${tr.latency_ms_p95.toFixed(1)} ms`),
   ].join("");

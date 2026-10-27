@@ -30,6 +30,23 @@ def test_kick_off_runs_to_full_time_and_shows_the_recap(api_url, new_page):
     assert box["y"] >= bar["y"] + bar["height"]
 
 
+def test_cards_and_trust_say_who_wrote_the_text(api_url, new_page):
+    page = new_page()
+    page.goto(api_url)
+    _kick_off(page, 7)
+    _wait_full_time(page)
+    chip = page.locator("#rail .tag.writer").first
+    assert chip.inner_text() == "Template"
+    page.click("#rail [data-why]")
+    assert "Written by: Template" in page.inner_text("#why")
+    page.keyboard.press("Escape")
+    page.click("#tab-trust")
+    assert "Writers" in page.inner_text("#trust-grid")
+    assert "0 model" in page.inner_text("#trust-grid")
+    page.click("#tab-fan")
+    assert page.locator("#fan-feed .tag.writer").first.inner_text() == "Template"
+
+
 def test_new_seed_works_without_closing_the_recap(api_url, new_page):
     page = new_page()
     page.goto(api_url)
