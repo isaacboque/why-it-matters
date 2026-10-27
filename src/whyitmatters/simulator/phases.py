@@ -18,6 +18,7 @@ class Style:
     press: float  # 0..1, how often and how high the team presses without the ball
     tempo: float  # multiplier on seconds per action (lower = faster)
     directness: float  # multiplier on forward progression per pass
+    line: float = 0.0  # metres the block sits higher (+) or deeper (-) than the phase role
 
     def blend(self, other: Style, w: float) -> Style:
         """Linear mix: w=0 -> self, w=1 -> other."""
@@ -26,6 +27,7 @@ class Style:
             press=self.press + (other.press - self.press) * w,
             tempo=self.tempo + (other.tempo - self.tempo) * w,
             directness=self.directness + (other.directness - self.directness) * w,
+            line=self.line + (other.line - self.line) * w,
         )
 
 
@@ -71,7 +73,40 @@ def phase_at(phases: list[Phase], minute: float) -> Phase:
     return phases[-1]
 
 
-def style_at(phases: list[Phase], minute: float, side: Side, quality: float) -> Style:
+@dataclass(frozen=True)
+class Identity:
+    """How a club plays, persistent across all of its matches (see teams.CLUB_IDENTITY)."""
+
+    label: str  # possession / direct / high-press / low-block
+    quality: float  # skill offset: the quality gap between clubs
+    press: float  # multiplier on pressing intensity
+    tempo: float  # multiplier on seconds per action
+    directness: float  # multiplier on forward progression and long balls
+    line: float  # metres added to the defensive line height
+    attack: float = 1.0  # multiplier on final-third shot rate
+
+
+NEUTRAL = Identity("balanced", 0.0, 1.0, 1.0, 1.0, 0.0)
+
+
+def game_state(diff: int, minute: float) -> tuple[float, float, float, float]:
+    """Behaviour change with the score late on: (press, directness, tempo, line shift).
+
+    A side protecting a lead drops its block, slows down and stops pressing; a trailing side
+    pushes up, presses and goes direct. Ramps in between minute 55 and 75.
+    """
+    if diff == 0:
+        return 1.0, 1.0, 1.0, 0.0
+    w = max(0.0, min(1.0, (minute - 55.0) / 20.0)) * min(1.0, abs(diff) / 1.5)
+    if diff > 0:
+        return 1.0 - 0.30 * w, 1.0 - 0.10 * w, 1.0 + 0.10 * w, -3.0 * w
+    return 1.0 + 0.20 * w, 1.0 + 0.30 * w, 1.0 - 0.08 * w, 3.0 * w
+
+
+def style_at(
+    phases: list[Phase], minute: float, side: Side, quality: float,
+    identity: Identity = NEUTRAL, diff: int = 0,
+) -> Style:
     """Team style at a match minute, blended across phase boundaries.
 
     `quality` is a small per-team offset so the same phase never plays out identically.
@@ -83,9 +118,11 @@ def style_at(phases: list[Phase], minute: float, side: Side, quality: float) -> 
     if idx > 0 and since_start < BLEND_MINUTES:
         prev = STYLES[phases[idx - 1].kind][side]
         style = prev.blend(style, since_start / BLEND_MINUTES)
+    gp, gd, gt, gl = game_state(diff, minute)
     return Style(
-        skill=min(0.97, style.skill + quality),
-        press=style.press,
-        tempo=style.tempo,
-        directness=style.directness,
+        skill=min(0.97, style.skill + quality + identity.quality),
+        press=min(0.95, style.press * identity.press * gp),
+        tempo=style.tempo * identity.tempo * gt,
+        directness=style.directness * identity.directness * gd,
+        line=identity.line + gl,
     )

@@ -27,7 +27,7 @@ Computed over a rolling 5-minute window (`pulse/metrics.py`, `pulse/engine.py`).
 | Chaos index | 0.5 × clip((turnovers/min − 2) / 3.5) + 0.5 × clip((0.82 − mean completion) / 0.27); in [0, 1] | ours | same |
 | State | chaos if chaos ≥ 0.55; else home/away control if dominance ≥ +0.25 / ≤ −0.25; else balanced. A change is confirmed after 3 consecutive minutes and back-dated by half a window | ours | `tests/test_pulse.py::test_transitions_change_state_and_cite_evidence` |
 
-**Validation.** On 20 held-out matches (seeds 1000+), a shift is counted as detected when it is confirmed within ±4 minutes with the correct new state. Results: recall 0.87, precision 0.67, timeline accuracy 0.82, mean confirmation lag 5.4 minutes. Run `python -m whyitmatters.eval --seeds 20 --check` to reproduce.
+**Validation.** On 20 held-out matches (seeds 1000+), a shift is counted as detected when it is confirmed within ±4 minutes with the correct new state. Results: recall 0.84, precision 0.61, timeline accuracy 0.81, mean confirmation lag 5.3 minutes. Run `python -m whyitmatters.eval --seeds 20 --check` to reproduce.
 
 **Known limitation.** The confirmation lag is the price of avoiding false alarms. Live claims therefore say "over the last five minutes".
 

@@ -29,7 +29,8 @@ from whyitmatters.schema import (
     Side,
     Team,
 )
-from whyitmatters.simulator.phases import phase_at
+from whyitmatters.simulator.phases import game_state, phase_at
+from whyitmatters.simulator.teams import CLUB_IDENTITY
 
 # Slot key = position + shirt number, as in teams.FORMATION_433
 SLOTS = ("GK1", "RB2", "CB4", "CB5", "LB3", "DM6", "CM8", "CM10", "RW7", "ST9", "LW11")
@@ -111,17 +112,18 @@ def _clip(v: float, lo: float, hi: float) -> float:
 
 
 def team_targets(
-    team: Team, role: RoleShape, in_possession: bool, ball: tuple[float, float]
+    team: Team, role: RoleShape, in_possession: bool, ball: tuple[float, float],
+    shift: float = 0.0,
 ) -> list[tuple[float, float]]:
     """Target positions for a team, in its own coordinates, given the ball (own coordinates)."""
     bx, by = ball
     if in_possession:
-        line = _clip(bx - 25.0, 12.0, role.line_in_cap)
+        line = _clip(bx - 25.0, 12.0, role.line_in_cap + shift)
         tmpl = IN_SHAPES[role.in_possession]
         lateral = 0.20
     else:
         # the back line holds its height, but never stands in front of a ball near its goal
-        line = min(role.line_out, max(6.0, bx - 10.0))
+        line = min(role.line_out + shift, max(6.0, bx - 10.0))
         tmpl = out_shape(role.out_of_possession, role.gap)
         lateral = 0.35
     shift_y = (by - PITCH_WIDTH / 2) * lateral
@@ -169,7 +171,10 @@ def add_freeze_frames(
         for side in ("home", "away"):
             role = ROLES[role_at(phases, ev.t / 60.0, side)]
             ball_own = _to_home(side, *ball_home)  # home->own is the same mirror
-            targets = team_targets(teams[side], role, side == holder, ball_own)
+            # club identity and game state move the block (a leader drops, a trailer pushes up)
+            diff = (ev.score_home - ev.score_away) * (1 if side == "home" else -1)
+            shift = CLUB_IDENTITY[teams[side].short_name].line + game_state(diff, ev.t / 60.0)[3]
+            targets = team_targets(teams[side], role, side == holder, ball_own, shift)
             new = []
             for i, (tx, ty) in enumerate(targets):
                 ox, oy = offsets[side][i]
