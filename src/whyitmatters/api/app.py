@@ -173,7 +173,9 @@ def _damage(ev: Event) -> dict[str, Any]:
         return out
     out["xt"] = round(xt_model.added(ev.x, ev.y, ev.end_x, ev.end_y), 3)
     if ev.type == EventType.PASS:
-        out["lb"] = damage.lines_broken(ev)
+        roles = damage.lines_broken_roles(ev)
+        out["lb"] = len(roles)
+        out["lbl"] = roles  # which lines: back, midfield, forward
         out["pk"] = damage.packing(ev)
     return out
 
@@ -203,6 +205,10 @@ def _sse(kind: str, data: Any) -> str:
     return f"event: {kind}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
 
 
+HEARTBEAT_S = 15.0  # SSE comment interval: stops proxies (Azure ingress) closing a quiet stream
+_HEARTBEAT = ": keep-alive\n\n"
+
+
 async def _replay(feed: list[dict[str, Any]], duration: float) -> AsyncIterator[str]:
     total = max((r["t"] for r in feed), default=0.0) or 1.0
     speed = total / duration if duration > 0 else 0.0  # match seconds per real second
@@ -210,6 +216,10 @@ async def _replay(feed: list[dict[str, Any]], duration: float) -> AsyncIterator[
     for i, rec in enumerate(feed):
         if speed:
             wait = started + rec["t"] / speed - time.monotonic()
+            while wait > HEARTBEAT_S:
+                await asyncio.sleep(HEARTBEAT_S)
+                yield _HEARTBEAT
+                wait = started + rec["t"] / speed - time.monotonic()
             if wait > 0:
                 await asyncio.sleep(wait)
         elif i % 200 == 0:
@@ -237,8 +247,20 @@ def create_app(env: Mapping[str, str] | None = None, client_factory=None) -> Fas
         # a fresh writer per match: its model-call budget and cache belong to that match
         return match, run_match(match, fault_rate=faults, seed=seed, generator=make_generator())
 
+    # One lock per (seed, faults): two viewers asking for the same cold match wait for one
+    # simulation instead of running it twice (lru_cache alone does not stop that).
+    locks: dict[tuple[int, float], threading.Lock] = {}
+    locks_guard = threading.Lock()
+
     def load(seed: int, faults: float) -> tuple[Match, Orchestrator]:
-        return run(seed, round(faults, 2))
+        key = (seed, round(faults, 2))
+        with locks_guard:
+            if len(locks) > 256:  # keep the table bounded: drop locks nobody holds
+                for k in [k for k, v in locks.items() if not v.locked()]:
+                    del locks[k]
+            lock = locks.setdefault(key, threading.Lock())
+        with lock:
+            return run(*key)
 
     # Pre-compute the demo matches in the background so the first viewer does not wait for a
     # model-written match (about a minute with an LLM writer). WIM_WARM_SEEDS="7,11,23".
@@ -285,9 +307,21 @@ def create_app(env: Mapping[str, str] | None = None, client_factory=None) -> Fas
     ) -> StreamingResponse:
         """Server-Sent Events. Event types: meta, event, pulse, transition, verdict, insight,
         cue (with `why`), dropped, trust, recap, end. Every message is `{"t", "data"}`."""
-        _, orch = await asyncio.to_thread(load, seed, faults)  # a model-written match is slow
+
+        async def body() -> AsyncIterator[str]:
+            yield ": open\n\n"  # headers and first bytes go out at once, even for a cold match
+            # a model-written match is slow: keep the stream alive while it is prepared
+            task = asyncio.ensure_future(asyncio.to_thread(load, seed, faults))
+            while not task.done():
+                await asyncio.wait({task}, timeout=HEARTBEAT_S)
+                if not task.done():
+                    yield _HEARTBEAT
+            _, orch = task.result()
+            async for chunk in _replay(build_feed(orch), duration):
+                yield chunk
+
         return StreamingResponse(
-            _replay(build_feed(orch), duration),
+            body(),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

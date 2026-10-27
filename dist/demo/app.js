@@ -53,10 +53,13 @@ const METRICS = {
   xt: "Expected threat (xT)", formation_in: "Shape in possession", formation_out: "Shape out of possession",
   gap_def_mid: "Gap, defence to midfield", team_length: "Team length", line_height: "Back-line height",
   line_breaks: "Line-breaking passes", packing: "Opponents bypassed", between_lines: "Received between the lines",
+  line_breaks_back: "Passes beating the defence", line_breaks_mid: "Passes beating midfield", line_breaks_fwd: "Passes beating the forward line",
+  between_mid_def: "Received between midfield and defence", between_fwd_mid: "Received between forwards and midfield",
   box_entries: "Box entries", zone14_entries: "Zone 14 entries", halfspace_entries: "Half-space entries",
   xt_share_left: "Threat down the left", xt_share_centre: "Threat through the middle", xt_share_right: "Threat down the right",
   pass_xt_added: "xT added by the pass", pass_packing: "Opponents the pass bypassed",
 };
+const LINE_NAMES = { back: "defence", midfield: "midfield", forward: "forwards" };
 const UNITS = {
   possession_share: "share", pass_completion: "share", field_tilt: "share", turnovers_per_min: "rate",
   window_minutes: "minutes", shot_xg: "xg", team_xg: "xg", score_home: "count", score_away: "count",
@@ -68,6 +71,7 @@ const UNITS = {
   counter_press_in_move: "count", long_balls_in_move: "count",
   xt: "xg", formation_in: "formation", formation_out: "formation", gap_def_mid: "metres", team_length: "metres",
   line_height: "metres", line_breaks: "count", packing: "count", between_lines: "count", box_entries: "count",
+  line_breaks_back: "count", line_breaks_mid: "count", line_breaks_fwd: "count", between_mid_def: "count", between_fwd_mid: "count",
   zone14_entries: "count", halfspace_entries: "count", xt_share_left: "share", xt_share_centre: "share",
   xt_share_right: "share", pass_xt_added: "xg", pass_packing: "count",
 };
@@ -80,6 +84,9 @@ const KINDS = {
 
 const S = {};
 let es = null;
+let startSeq = 0;      // bumps on every Kick off: late answers from an older start are ignored
+let gotRecord = false; // true once the current match has delivered its first record
+let seedNote = "";     // the standing note about the seed (clamped, or not recorded)
 let STATIC = false; // no backend: replay the pre-recorded files under data/
 let MANIFEST = null; // data/index.json
 let replayToken = 0;
@@ -162,9 +169,25 @@ const handlers = {
     showRecap();
   },
 };
+// A one-line status above the views: "Preparing match…", a clamped seed, a missing recording.
+function setNote(msg) {
+  const n = $("start-notice");
+  n.textContent = msg || "";
+  n.hidden = !msg;
+}
+function closeDialogs() {
+  for (const id of ["recap", "why"]) { const d = $(id); if (d.open) d.close(); }
+}
+function showStartError(msg) {
+  S.ended = true;
+  setNote(seedNote);
+  $("rail").innerHTML = `<div class="empty">${esc(msg)} <button type="button" data-retry>Retry</button></div>`;
+  renderScoreboards();
+}
 function dispatch(type, m) {
   const fn = handlers[type];
   if (!fn) return;
+  if (!gotRecord) { gotRecord = true; setNote(seedNote); }
   if (m.t > S.matchT) S.matchT = m.t;
   fn(m.data, m);
 }
@@ -174,9 +197,11 @@ async function openStaticStream(pace, faults) {
   const token = ++replayToken;
   let feed;
   try {
-    feed = await (await fetch(`data/${S.seed}/stream-${faults ? "faults" : "clean"}.json`)).json();
+    const r = await fetch(`data/${S.seed}/stream-${faults ? "faults" : "clean"}.json`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    feed = await r.json();
   } catch (e) {
-    $("rail").innerHTML = `<div class="empty">Could not load the recording: ${esc(e.message)}</div>`;
+    if (token === replayToken) showStartError(`Could not load the recording (${e.message}).`);
     return;
   }
   if (token !== replayToken) return;
@@ -199,30 +224,61 @@ function openStream() {
   const pace = parseFloat($("pace").value);
   const faults = $("faults").checked ? 0.3 : 0;
   if (STATIC) { openStaticStream(pace, faults); return; }
-  es = new EventSource(`matches/${S.seed}/stream?duration=${pace}&faults=${faults}`);
-  for (const type of Object.keys(handlers)) es.addEventListener(type, (e) => dispatch(type, JSON.parse(e.data)));
-  es.onerror = () => {
+  const mine = es = new EventSource(`matches/${S.seed}/stream?duration=${pace}&faults=${faults}`);
+  for (const type of Object.keys(handlers)) {
+    mine.addEventListener(type, (e) => { if (es === mine) dispatch(type, JSON.parse(e.data)); });
+  }
+  mine.onerror = () => {
     // never let the browser auto-reconnect: that would replay the match from the start
-    es.close();
-    if (!S.ended) S.ended = true;
-    renderScoreboards();
+    mine.close();
+    if (es !== mine || S.ended) return;
+    if (!gotRecord) showStartError("The match stream failed before it started.");
+    else { S.ended = true; renderScoreboards(); }
   };
 }
 
+// The seed box: empty, negative, too large or not a number never leaves a blank screen.
+let pendingSeed = null; // ?seed=N from the address bar, used once by the first Kick off
+function readSeed() {
+  const raw = (pendingSeed ?? $("seed").value).trim();
+  pendingSeed = null;
+  const n = Number(raw);
+  if (STATIC) {
+    const ok = MANIFEST.seeds[raw];
+    if (ok) return { seed: +raw, note: "" };
+    const first = +Object.keys(MANIFEST.seeds)[0];
+    return { seed: first, note: `Match ${raw || "?"} is not in the recorded set (${Object.keys(MANIFEST.seeds).join(", ")}); showing ${first}.` };
+  }
+  if (raw === "" || !Number.isFinite(n)) return { seed: 7, note: `"${raw}" is not a match number; showing match 7.` };
+  const seed = Math.max(0, Math.min(100000, Math.round(n)));
+  return { seed, note: seed === n ? "" : `Match numbers run from 0 to 100000; showing match ${seed}.` };
+}
+
 async function start() {
+  const mine = ++startSeq;
   if (es) es.close();
+  es = null;
   replayToken++;
+  personalToken++;
+  closeDialogs();
   const keep = S.viewer;
   reset();
   S.viewer = keep;
-  S.seed = Math.max(0, Math.min(100000, parseInt($("seed").value, 10) || 0));
-  if (STATIC && !MANIFEST.seeds[S.seed]) S.seed = +Object.keys(MANIFEST.seeds)[0];
+  gotRecord = false;
+  const picked = readSeed();
+  S.seed = picked.seed;
+  seedNote = picked.note;
   $("seed").value = S.seed;
-  $("recap").close?.();
+  setNote(`${seedNote} Preparing match…`.trim());
+  renderRail();
   try {
-    S.info = await (await fetch(STATIC ? `data/${S.seed}/info.json` : `matches/${S.seed}`)).json();
+    const r = await fetch(STATIC ? `data/${S.seed}/info.json` : `matches/${S.seed}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const info = await r.json();
+    if (mine !== startSeq) return; // a newer Kick off took over while this one was loading
+    S.info = info;
   } catch (e) {
-    $("rail").innerHTML = `<div class="empty">Could not load the match: ${esc(e.message)}</div>`;
+    if (mine === startSeq) showStartError(`Could not load the match (${e.message}).`);
     return;
   }
   buildSelectors();
@@ -347,8 +403,8 @@ const H2H = [
   ["xG", "xg", "xg", "Expected goals: how many goals the chances were worth, from where each shot was taken."],
   ["Expected threat (xT)", "xt", "xg", "How much closer to scoring each team moved the ball with passes and carries."],
   ["Shots", "shots", "count", "Shots on, off and blocked."],
-  ["Line-breaking passes", "line_breaks", "count", "Completed passes that went past at least one line of opponents."],
-  ["Received between the lines", "between_lines", "count", "Passes received in the space between the opponent's defence and midfield."],
+  ["Line-breaking passes", "line_breaks", "count", "Completed passes that crossed a line of opponents through its span, not round the side."],
+  ["Received between the lines", "between_lines", "count", "Passes received in the space between any two lines of the opponent, at least 3 m from every opponent."],
   ["Box entries", "box_entries", "count", "Passes and carries that reached the penalty area."],
   ["Progressive passes", "progressive_passes", "count", "Completed passes that moved the ball at least 10 m towards goal."],
   ["High recoveries", "high_recoveries", "count", "Times the ball was won back in the opponent's half."],
@@ -425,7 +481,7 @@ function openWhy(id) {
       <td class="${k.ok ? "ok" : "bad"}">${k.ok ? "✓" : "✗"}</td></tr>`).join("");
   const evidence = w.evidence.map((ev) => `<tr><td><code>${esc(ev.id)}</code></td><td>${Math.floor(ev.t / 60)}'</td>
       <td>${esc(ev.type)}</td><td>${esc(ev.player || teamName(ev.side))}</td>
-      <td>${esc(ev.outcome || "")}${ev.xg != null ? ` · ${ev.xg.toFixed(2)} xG` : ""}</td></tr>`).join("");
+      <td>${esc(ev.outcome || "")}${ev.xg != null ? ` · ${ev.xg.toFixed(2)} xG` : ""}${ev.lbl && ev.lbl.length ? ` · beat ${esc(ev.lbl.map((l) => LINE_NAMES[l] || l).join(" + "))}` : ""}</td></tr>`).join("");
   const history = w.history.map((h) => `<li>Draft ${h.attempt}: ${h.ok
       ? '<b style="color:var(--ok-ink)">verified</b>'
       : `<b style="color:var(--bad)">rejected</b> — ${esc(failureList(h))}`}</li>`).join("");
@@ -444,7 +500,15 @@ function openWhy(id) {
 document.addEventListener("click", (e) => {
   const d = e.target.closest("[data-close]");
   if (d) d.closest("dialog").close();
+  if (e.target.closest("[data-retry]")) start();
+  if (e.target === $("why")) $("why").close(); // a click on the backdrop
 });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("recap").open) $("recap").close(); // non-modal dialogs ignore Esc on their own
+});
+// Changing the match or the pace leaves the old recap behind; both apply on the next Kick off.
+for (const id of ["pace", "faults"]) $(id).addEventListener("change", () => $("recap").close());
+$("seed").addEventListener("change", () => $("recap").close());
 
 // ----------------------------------------------------------------------------- fan view
 const MODES = ["fan", "player_focus", "analyst", "coach"];
@@ -612,7 +676,8 @@ function showRecap() {
     <p>${esc(r.summary)}</p>
     <h2>${esc(t.moments)}</h2>
     <ol>${r.moments.map((m) => `<li><b>${m.minute}'</b> ${esc(m.headline)}<br><span class="legend">${esc(m.body)}</span></li>`).join("")}</ol>`;
-  if (!$("recap").open) $("recap").showModal();
+  // non-modal: the header controls stay clickable while the recap is open
+  if (!$("recap").open) $("recap").show();
 }
 
 // ----------------------------------------------------------------------------- canvases
@@ -763,7 +828,7 @@ const LAYERS = {
   },
   passes: {
     caption: () => S.hurt.length
-      ? `The ${S.hurt.length} completed passes that added the most expected threat so far. Thicker = more dangerous. A ring at the start means the pass went past at least one line of opponents.`
+      ? `The ${S.hurt.length} completed passes that added the most expected threat so far. Thicker = more dangerous. A ring at the start means the pass beat a line of opponents; the label says which.`
       : "The most dangerous passes appear here as the game goes on.",
     legend: () => `<span><span class="swatch home"></span>${esc(teamShort("home"))}</span><span><span class="swatch away"></span>${esc(teamShort("away"))}</span><span>labels: passer and xT added</span>`,
     draw(ctx, sx, sy, dpr) {
@@ -782,7 +847,13 @@ const LAYERS = {
       top.slice(0, 4).forEach((ev) => {
         const [x2, y2] = abs(ev.side, ev.end_x, ev.end_y);
         ctx.fillStyle = "#fff"; ctx.textAlign = x2 > 80 ? "right" : "left";
-        ctx.fillText(`${surname(ev.player_id)} +${ev.xt.toFixed(2)}`, x2 * sx + (x2 > 80 ? -8 : 8) * dpr, y2 * sy - 6 * dpr);
+        const lx = x2 * sx + (x2 > 80 ? -8 : 8) * dpr;
+        ctx.fillText(`${surname(ev.player_id)} +${ev.xt.toFixed(2)}`, lx, y2 * sy - 6 * dpr);
+        if (ev.lbl && ev.lbl.length) { // which lines the pass beat
+          ctx.font = `500 ${10 * dpr}px "IBM Plex Sans", sans-serif`; ctx.globalAlpha = 0.85;
+          ctx.fillText(`beat ${ev.lbl.map((l) => LINE_NAMES[l] || l).join(" + ")}`, lx, y2 * sy + 8 * dpr);
+          ctx.globalAlpha = 1; ctx.font = `600 ${11 * dpr}px "IBM Plex Sans", sans-serif`;
+        }
       });
     },
   },
@@ -1053,6 +1124,9 @@ function enableStaticUi() {
     .map(([s, m]) => `<option value="${esc(s)}">${esc(s)} · ${esc(m.home)} v ${esc(m.away)}</option>`).join("");
   $("seed").replaceWith(sel);
   sel.addEventListener("change", start);
+  sel.addEventListener("change", () => $("recap").close());
+  const label = sel.closest("label");
+  if (label && label.firstChild) label.firstChild.textContent = "Recorded matches ";
   document.querySelector("footer").insertAdjacentHTML("afterbegin",
     "<b>Static demo:</b> pre-recorded matches replayed in your browser, no server involved. ");
 }
@@ -1063,6 +1137,8 @@ async function boot() {
     if (!MANIFEST) { $("rail").innerHTML = `<div class="empty">No backend and no pre-recorded data found.</div>`; return; }
     enableStaticUi();
   }
+  const wanted = new URLSearchParams(location.search).get("seed");
+  if (wanted !== null) pendingSeed = wanted;
   start();
 }
 boot();

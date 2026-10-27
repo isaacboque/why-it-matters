@@ -96,7 +96,12 @@ Metric = Literal[
     # damage, window + side (pulse/damage.py)
     "line_breaks",  # completed passes that go past at least one opponent line
     "packing",  # opponents taken out of the game by completed passes
-    "between_lines",  # passes received between the opponent's back line and midfield
+    "between_lines",  # passes received in space between any two opponent lines (total)
+    "line_breaks_back",  # passes through the opponent's back line (lateral-span rule)
+    "line_breaks_mid",  # ... through the midfield line
+    "line_breaks_fwd",  # ... through the forward line
+    "between_mid_def",  # receptions in space between the opponent's midfield and defence
+    "between_fwd_mid",  # receptions in space between the opponent's press and midfield
     "box_entries",
     "zone14_entries",
     "halfspace_entries",
@@ -140,6 +145,11 @@ TEAM_WINDOW_METRICS = frozenset(
         "line_breaks",
         "packing",
         "between_lines",
+        "line_breaks_back",
+        "line_breaks_mid",
+        "line_breaks_fwd",
+        "between_mid_def",
+        "between_fwd_mid",
         "box_entries",
         "zone14_entries",
         "halfspace_entries",
