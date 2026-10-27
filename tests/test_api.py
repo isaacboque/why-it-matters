@@ -219,3 +219,18 @@ def test_cold_match_is_simulated_once_under_concurrency():
         for t in threads:
             t.join()
     assert calls == [4242]
+
+
+def test_featured_endpoint_is_a_list(client):
+    r = client.get("/featured")
+    assert r.status_code == 200 and isinstance(r.json(), list)
+
+
+def test_export_limits_unreliable_recordings_and_lists_featured(tmp_path):
+    from whyitmatters.api.export import export_demo
+
+    m = export_demo([7, 11], tmp_path / "demo", faults_for=1)
+    assert m["seeds"]["7"]["faults"] is True and m["seeds"]["11"]["faults"] is False
+    assert (tmp_path / "demo/data/7/stream-faults.json").exists()
+    assert not (tmp_path / "demo/data/11/stream-faults.json").exists()
+    assert (tmp_path / "demo/data/featured.json").exists()

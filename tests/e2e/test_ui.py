@@ -114,3 +114,34 @@ def test_phone_recap_is_a_bottom_sheet_with_a_visible_close(api_url, new_page):
     assert not page.evaluate("document.querySelector('#recap').open")
     page.click("#start")  # controls remain reachable
     page.press("body", "Escape")
+
+
+def test_deep_link_opens_the_exact_match(api_url, new_page):
+    page = new_page()
+    page.goto(f"{api_url}?seed=11&pace=0&faults=1")
+    _wait_full_time(page)
+    assert page.evaluate("S.seed") == 11
+    assert page.input_value("#pace") == "0" and page.is_checked("#faults")
+    assert "seed=11" in page.url and "faults=1" in page.url
+
+
+def test_random_match_kicks_off(api_url, new_page):
+    page = new_page()
+    page.goto(api_url)
+    page.select_option("#pace", "0")
+    page.click("#random")
+    _wait_full_time(page)
+    assert 0 <= page.evaluate("S.seed") < 1000
+
+
+def test_featured_match_can_be_picked(api_url, new_page):
+    page = new_page()
+    page.goto(api_url + "?pace=0")
+    if page.locator("#featured-label").is_hidden():
+        pytest.skip("no featured matches generated yet")
+    options = page.locator("#featured option:not([value=''])")
+    seed = int(options.first.get_attribute("value"))
+    page.select_option("#featured", str(seed))
+    page.wait_for_function(f"S.seed === {seed}")
+    _wait_full_time(page)
+    assert page.input_value("#seed") == str(seed)

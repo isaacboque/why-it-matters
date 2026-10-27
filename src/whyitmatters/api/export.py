@@ -32,7 +32,7 @@ from typing import Any, get_args
 from whyitmatters.agents import Orchestrator, run_match
 from whyitmatters.agents.generator import TEMPLATE_LANGS
 from whyitmatters.agents.models import Mode, Viewer
-from whyitmatters.api.app import _eval, build_feed
+from whyitmatters.api.app import _eval, build_feed, featured
 from whyitmatters.simulator import simulate
 
 WEB_DIR = Path(__file__).resolve().parents[3] / "web"
@@ -41,6 +41,7 @@ EVAL_SEEDS = 20
 FOCUS_PLAYERS = 3
 LANGS: tuple[str, ...] = TEMPLATE_LANGS
 MODES: tuple[str, ...] = tuple(m for m in get_args(Mode) if m != "player_focus")
+FAULTS_FOR = 2  # seeds (in order) that also get an unreliable-model recording
 SIZE_BUDGET = 15_000_000  # Analytics v2: shape and xT in every pulse
 
 Writer = Callable[[Path, Any], None]
@@ -66,13 +67,14 @@ def _focus_players(orch: Orchestrator) -> list[str]:
     return [p for p, _ in ranked[:FOCUS_PLAYERS]]
 
 
-def _export_seed(seed: int, d: Path, write: Writer) -> dict[str, Any]:
+def _export_seed(seed: int, d: Path, write: Writer, faults: bool = True) -> dict[str, Any]:
     match = simulate(seed)
     clean = run_match(match, fault_rate=0.0, seed=seed)
-    faulty = run_match(match, fault_rate=FAULT_RATE, seed=seed)
     write(d / "info.json", match.meta.model_dump(mode="json"))
     write(d / "stream-clean.json", build_feed(clean))
-    write(d / "stream-faults.json", build_feed(faulty))
+    if faults:  # the unreliable-model replay is the heaviest file: only the first few seeds get one
+        faulty = run_match(match, fault_rate=FAULT_RATE, seed=seed)
+        write(d / "stream-faults.json", build_feed(faulty))
     cues = [c.model_dump(mode="json") for c in clean.cues]
     write(
         d / "cues.json",
@@ -85,10 +87,17 @@ def _export_seed(seed: int, d: Path, write: Writer) -> dict[str, Any]:
         for player in focus:
             name = f"personal-player_focus-{player}-{lang}.json"
             write(d / name, _personal(clean, "player_focus", lang, player))
-    return {"home": match.meta.home.name, "away": match.meta.away.name, "focus_players": focus}
+    return {
+        "home": match.meta.home.name,
+        "away": match.meta.away.name,
+        "focus_players": focus,
+        "faults": faults,
+    }
 
 
-def export_demo(seeds: list[int], out: Path, web_dir: Path = WEB_DIR) -> dict[str, Any]:
+def export_demo(
+    seeds: list[int], out: Path, web_dir: Path = WEB_DIR, faults_for: int = FAULTS_FOR
+) -> dict[str, Any]:
     """Write the static demo into `out` and return the manifest (also saved as data/index.json)."""
     out = Path(out)
     shutil.copytree(web_dir, out, dirs_exist_ok=True)  # overwrites in place, never deletes
@@ -102,7 +111,12 @@ def export_demo(seeds: list[int], out: Path, web_dir: Path = WEB_DIR) -> dict[st
         files.append(path.relative_to(out).as_posix())
 
     write(data / "eval.json", _eval(EVAL_SEEDS))
-    per_seed = {str(s): _export_seed(s, data / str(s), write) for s in seeds}
+    per_seed = {
+        str(s): _export_seed(s, data / str(s), write, faults=i < faults_for)
+        for i, s in enumerate(seeds)
+    }
+    shown = [f for f in featured() if f["seed"] in seeds]
+    write(data / "featured.json", shown)
     manifest: dict[str, Any] = {
         "seeds": per_seed,
         "langs": list(LANGS),
@@ -117,10 +131,13 @@ def export_demo(seeds: list[int], out: Path, web_dir: Path = WEB_DIR) -> dict[st
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Export a self-contained static demo")
-    ap.add_argument("--seeds", type=int, nargs="+", default=[7, 11, 23])
+    ap.add_argument("--seeds", type=int, nargs="+", default=None,
+                    help="default: the featured matches, or 7 11 23 when there are none")
+    ap.add_argument("--faults-for", type=int, default=FAULTS_FOR)
     ap.add_argument("--out", type=Path, default=Path("dist/demo"))
     args = ap.parse_args()
-    m = export_demo(args.seeds, args.out)
+    seeds = args.seeds or [f["seed"] for f in featured()] or [7, 11, 23]
+    m = export_demo(seeds, args.out, faults_for=args.faults_for)
     print(f"wrote {len(m['files'])} data files, {m['bytes'] / 1e6:.2f} MB total -> {args.out}")
     if m["bytes"] > SIZE_BUDGET:
         raise SystemExit(f"demo is {m['bytes']} bytes, over the {SIZE_BUDGET} budget")
