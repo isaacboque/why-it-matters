@@ -92,7 +92,9 @@ def test_static_demo_switches_between_recorded_matches(static_url, new_page):
     page.goto(static_url + "?static=1")
     page.wait_for_selector("select#seed")
     assert "Recorded matches" in page.inner_text("label:has(#seed)")
-    for seed in (11, 23, 7):
+    recorded = [int(x) for x in page.evaluate("Object.keys(MANIFEST.seeds)")]
+    assert len(recorded) >= 3
+    for seed in (recorded[1], recorded[2], recorded[0]):
         page.select_option("#pace", "0")
         page.select_option("#seed", str(seed))
         page.wait_for_function(f"S.seed === {seed}")
@@ -137,7 +139,11 @@ def test_random_match_kicks_off(api_url, new_page):
 def test_featured_match_can_be_picked(api_url, new_page):
     page = new_page()
     page.goto(api_url + "?pace=0")
-    if page.locator("#featured-label").is_hidden():
+    try:
+        page.wait_for_function(
+            "document.querySelectorAll('#featured option').length > 1", timeout=5000
+        )
+    except Exception:  # noqa: BLE001
         pytest.skip("no featured matches generated yet")
     options = page.locator("#featured option:not([value=''])")
     seed = int(options.first.get_attribute("value"))

@@ -8,6 +8,6 @@ RUN pip install --no-cache-dir ".[api,llm,maf]"
 
 ENV WHYITMATTERS_WEB=/app/web \
     WIM_ENGINE=agent_framework \
-    WIM_WARM_SEEDS=7,11,23
+    WIM_WARM_SEEDS=60,32,109,409,51,156,173,281
 EXPOSE 8000
 CMD ["uvicorn", "whyitmatters.api:app", "--host", "0.0.0.0", "--port", "8000"]
