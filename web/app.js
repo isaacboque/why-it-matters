@@ -197,7 +197,12 @@ async function openStaticStream(pace, faults) {
   const token = ++replayToken;
   let feed;
   try {
-    const r = await fetch(`data/${S.seed}/stream-${faults ? "faults" : "clean"}.json`);
+    const recorded = !faults || (MANIFEST.seeds[S.seed] || {}).faults !== false;
+    if (!recorded) {
+      seedNote = `${seedNote} No unreliable-model recording for this match; showing the clean run.`.trim();
+      setNote(seedNote);
+    }
+    const r = await fetch(`data/${S.seed}/stream-${faults && recorded ? "faults" : "clean"}.json`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     feed = await r.json();
   } catch (e) {
@@ -238,6 +243,62 @@ function openStream() {
 }
 
 // The seed box: empty, negative, too large or not a number never leaves a blank screen.
+let FEATURED = []; // curated matches: [{seed, title, tags, home, away}]
+async function loadFeatured() {
+  try {
+    const r = await fetch(STATIC ? "data/featured.json" : "featured");
+    const list = r.ok ? await r.json() : [];
+    FEATURED = (Array.isArray(list) ? list : []).filter((f) => !STATIC || MANIFEST.seeds[f.seed]);
+  } catch { FEATURED = []; }
+  const sel = $("featured");
+  if (!FEATURED.length || STATIC) {
+    // static mode: the recorded-matches select carries the featured titles instead
+    if (STATIC && FEATURED.length) labelStaticOptions();
+    return;
+  }
+  sel.innerHTML = `<option value="">Choose a match…</option>` + FEATURED.map((f) =>
+    `<option value="${f.seed}" title="${esc((f.tags || []).join(" · "))}">${esc(f.title)} · ${esc(f.home)} v ${esc(f.away)}</option>`).join("");
+  $("featured-label").hidden = false;
+}
+function labelStaticOptions() {
+  const byseed = Object.fromEntries(FEATURED.map((f) => [String(f.seed), f]));
+  for (const o of $("seed").options) {
+    const f = byseed[o.value];
+    if (f) { o.textContent = `${f.title} · ${f.home} v ${f.away}`; o.title = (f.tags || []).join(" · "); }
+  }
+}
+// Keep the address bar a shareable deep link: ?seed=7&pace=0&faults=1
+function syncUrl() {
+  const q = new URLSearchParams(location.search);
+  q.set("seed", S.seed);
+  q.set("pace", $("pace").value);
+  if ($("faults").checked) q.set("faults", "1"); else q.delete("faults");
+  try { history.replaceState(null, "", `?${q}`); } catch { /* sandboxed frame */ }
+}
+const PACES = { live: "180", fast: "45", instant: "0" };
+function applyDeepLinkOptions() {
+  const q = new URLSearchParams(location.search);
+  const pace = q.get("pace");
+  if (pace !== null) {
+    const v = PACES[pace.toLowerCase()] ?? pace;
+    if ([...$("pace").options].some((o) => o.value === v)) $("pace").value = v;
+  }
+  if (q.has("faults")) $("faults").checked = ["1", "true", "yes"].includes(q.get("faults").toLowerCase());
+}
+function randomSeed() {
+  if (STATIC) {
+    const seeds = Object.keys(MANIFEST.seeds);
+    return seeds[Math.floor(Math.random() * seeds.length)];
+  }
+  return String(Math.floor(Math.random() * 1000));
+}
+$("random").addEventListener("click", () => { $("seed").value = randomSeed(); start(); });
+$("featured").addEventListener("change", () => {
+  if (!$("featured").value) return;
+  $("seed").value = $("featured").value;
+  start();
+});
+
 let pendingSeed = null; // ?seed=N from the address bar, used once by the first Kick off
 function readSeed() {
   const raw = (pendingSeed ?? $("seed").value).trim();
@@ -269,6 +330,8 @@ async function start() {
   S.seed = picked.seed;
   seedNote = picked.note;
   $("seed").value = S.seed;
+  if ($("featured")) $("featured").value = FEATURED.some((f) => f.seed === S.seed) ? String(S.seed) : "";
+  syncUrl();
   setNote(`${seedNote} Preparing match…`.trim());
   renderRail();
   try {
@@ -1137,6 +1200,8 @@ async function boot() {
     if (!MANIFEST) { $("rail").innerHTML = `<div class="empty">No backend and no pre-recorded data found.</div>`; return; }
     enableStaticUi();
   }
+  await loadFeatured();
+  applyDeepLinkOptions();
   const wanted = new URLSearchParams(location.search).get("seed");
   if (wanted !== null) pendingSeed = wanted;
   start();

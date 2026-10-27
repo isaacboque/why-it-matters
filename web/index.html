@@ -16,7 +16,9 @@
   <header class="top">
     <div class="brand">WhyItMatters<small>synthetic data only</small></div>
     <div class="controls">
+      <label id="featured-label" hidden>Featured <select id="featured"><option value="">Choose a match…</option></select></label>
       <label>Match seed <input id="seed" type="number" min="0" max="100000" value="7"></label>
+      <button id="random" type="button" title="Open a random match">Random</button>
       <label>Pace
         <select id="pace">
           <option value="180">Live (~3 min)</option>

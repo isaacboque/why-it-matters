@@ -201,6 +201,18 @@ def build_feed(orch: Orchestrator) -> list[dict[str, Any]]:
     return feed
 
 
+FEATURED_FILE = Path(__file__).resolve().parents[1] / "simulator" / "featured.json"
+
+
+def featured() -> list[dict[str, Any]]:
+    """The curated demo matches (`python -m whyitmatters.simulator.featured`); [] until made."""
+    try:
+        data = json.loads(FEATURED_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return data if isinstance(data, list) else []
+
+
 def _sse(kind: str, data: Any) -> str:
     return f"event: {kind}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
 
@@ -284,6 +296,11 @@ def create_app(env: Mapping[str, str] | None = None, client_factory=None) -> Fas
             generator=generator_status,
             engine=(env or os.environ).get("WIM_ENGINE", "inline"),
         )
+
+    @app.get("/featured", tags=["match"])
+    def featured_matches() -> list[dict[str, Any]]:
+        """Curated matches worth opening first: seed, spoiler-free title, tags, teams."""
+        return featured()
 
     @app.get("/matches/{seed}", response_model=MatchMeta, tags=["match"])
     def match_info(seed: SeedPath) -> MatchMeta:
