@@ -8,9 +8,9 @@
 
 | Link | |
 | --- | --- |
-| Live demo (Azure Container Apps) | https://whyitmatters.nicerock-0b92f5eb.swedencentral.azurecontainerapps.io |
+| Live demo (Azure Container Apps) | https://whyitmatters.nicerock-0b92f5eb.swedencentral.azurecontainerapps.io/?seed=391&pace=45&faults=1 |
 | Static fallback | `python -m http.server -d dist/demo` (no backend) |
-| Demo video | VIDEO_URL |
+| Demo video (under 2 min) | https://youtu.be/pYL-ZfiTMZA |
 
 Best first click: `?seed=391&pace=45&faults=1`: https://whyitmatters.nicerock-0b92f5eb.swedencentral.azurecontainerapps.io/?seed=391&pace=45&faults=1
 
