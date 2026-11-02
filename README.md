@@ -183,6 +183,10 @@ or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`. To 
 
 `python -m whyitmatters.api.export --seeds 7 11 23 --out dist/demo` writes a self-contained folder (the UI plus pre-recorded JSON, under 15 MB, relative paths only). It is committed in `dist/demo/`: serve it from any static host (or `python -m http.server -d dist/demo`) and the UI replays the recordings with the same pacing as the live stream. It is also the fallback if the hosted deploy is down.
 
+### Regenerating the showcase video
+
+`python scripts/make_brag_video.py --out out/why-it-matters-brag.webm` records a ~30 s 1920x1080 tour of the static demo with Playwright (needs `playwright install chromium`); captions read their numbers from the page. Convert with `ffmpeg -i in.webm -c:v libx264 -pix_fmt yuv420p -r 30 -crf 23 -movflags +faststart out.mp4`.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
