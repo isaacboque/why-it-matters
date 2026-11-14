@@ -183,6 +183,10 @@ or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`. To 
 
 `python -m whyitmatters.api.export --seeds 7 11 23 --out dist/demo` writes a self-contained folder (the UI plus pre-recorded JSON, under 15 MB, relative paths only). It is committed in `dist/demo/`: serve it from any static host (or `python -m http.server -d dist/demo`) and the UI replays the recordings with the same pacing as the live stream. It is also the fallback if the hosted deploy is down.
 
+## How I built this
+
+I built this with Claude (Claude Code for implementation, Claude chat for planning), and the commit trailers show where. What I decided, what I delegated and how the output was checked are in [docs/HOW-I-BUILT-THIS.md](docs/HOW-I-BUILT-THIS.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
