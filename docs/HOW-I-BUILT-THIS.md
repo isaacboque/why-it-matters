@@ -6,22 +6,20 @@ WhyItMatters was built for the Microsoft x Premier League *Inside the Game* hack
 
 ## Tooling
 
-I used Claude Code to implement most of the code, tests and docs, working through small pull requests (the history is a numbered series of them). I used Claude in chat for planning, reviewing approaches and talking through trade-offs before they went into a PR.
+I used Claude in chat to guide me, give me options and do research before I decided. I used Claude Code to implement most of the code, tests and docs, working through small pull requests (the history is a numbered series of them).
 
 ## Who decided what
 
-| Decided by me | Delegated to Claude |
-| --- | --- |
-| The challenge to enter and the problem framing in [SPEC.md](../SPEC.md): explain *why* a moment matters and prove it | Writing most of the code, tests and docs inside each pull request |
-| Synthetic data only, with ground truth planted by the simulator ([DATA.md](DATA.md)) | The simulator, Match Pulse engine and agent team implementations |
-| Every number on air must be a typed claim the Verifier recomputes from the raw event log | The Verifier, claims ledger and fault-injection test |
-| Hosting on Azure Container Apps, image from GHCR | Deploy scripts and CI workflows |
-| Optional model-written captions behind guardrails, with a template fallback ([LLM.md](LLM.md)) | The guard logic: number, name and length checks, retries, cost cap |
-| TODO(Isaac): confirm who chose Microsoft Agent Framework for the pipeline | The workflow graph and the parity test against the inline engine |
-| TODO(Isaac): confirm who chose the metric set and thresholds in [METRICS.md](METRICS.md) | Formulas, parameters and the tests that pin them |
-| TODO(Isaac): confirm who chose the UI direction and views | UI implementation and polish passes |
+Every decision is mine: the problem, the scope, the architecture, the metrics and thresholds, the hosting, the UI direction, and what ships. Claude's role was to guide me, lay out options with their trade-offs, and do research. Claude Code then carried out the implementation under my direction, in small pull requests that I reviewed and merged.
 
-Rows marked `TODO(Isaac)` are my best reading of the repository; I have not confirmed them yet.
+Decisions that shaped the project:
+
+- The challenge to enter and the problem framing in [SPEC.md](../SPEC.md): explain *why* a moment matters and prove it.
+- Synthetic data only, with ground truth planted by the simulator ([DATA.md](DATA.md)).
+- Every number on air must be a typed claim the Verifier recomputes from the raw event log.
+- Microsoft Agent Framework for the pipeline, Azure Container Apps for hosting, image from GHCR.
+- Optional model-written captions behind guardrails, with a template fallback ([LLM.md](LLM.md)).
+- The metric set and thresholds ([METRICS.md](METRICS.md)) and the views in the UI.
 
 ## How the output was checked
 

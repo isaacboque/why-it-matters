@@ -185,7 +185,7 @@ or `docker build -t whyitmatters . && docker run -p 8000:8000 whyitmatters`. To 
 
 ## How I built this
 
-I built this with Claude (Claude Code for implementation, Claude chat for planning), and the commit trailers show where. What I decided, what I delegated and how the output was checked are in [docs/HOW-I-BUILT-THIS.md](docs/HOW-I-BUILT-THIS.md).
+I built this with Claude (Claude Code for implementation, Claude chat for planning), and the commit trailers show where. What I decided, what Claude did and how the output was checked are in [docs/HOW-I-BUILT-THIS.md](docs/HOW-I-BUILT-THIS.md).
 
 ## License
 
