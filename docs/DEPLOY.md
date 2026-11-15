@@ -1,6 +1,6 @@
 # Deploying to Azure
 
-This puts WhyItMatters on a public URL for the judges, from a browser only (phone works too). Total time about 30 minutes, most of it waiting. The judging period runs to **10 November 2026**, so the app must stay up until then.
+This puts WhyItMatters on a public URL, from a browser only (phone works too). Total time about 30 minutes, most of it waiting. It was written for the hackathon judging period, which ran to **10 November 2026**; the hosted demo is not guaranteed to stay online afterwards.
 
 What you end up with:
 
@@ -59,7 +59,7 @@ Why GHCR: free Azure subscriptions refuse to build images (`TasksOperationsNotAl
    bash infra/deploy.sh
    ```
 
-   The script registers the services it needs, creates the app from the GHCR image (no Docker or build on your side), keeps one replica warm (`--min-replicas 1`, so judges never hit a cold start), adds the model secret if you set it, and waits until `/health` answers. It ends by printing the URL.
+   The script registers the services it needs, creates the app from the GHCR image (no Docker or build on your side), keeps one replica warm (`--min-replicas 1`, so nobody hits a cold start), adds the model secret if you set it, and waits until `/health` answers. It ends by printing the URL.
 
 ## 5. Check it
 
@@ -83,9 +83,9 @@ cd ~/why-it-matters && git pull && bash infra/redeploy.sh
 
 `redeploy.sh` is one `az containerapp update --image ... --revision-suffix ...`: the new suffix forces Azure to pull the fresh `:latest`, and the settings and the Foundry secret stay as they are. Re-running `bash infra/deploy.sh` also works (it adds a new suffix each time). To switch Foundry on or change the key later, export the three `AZURE_OPENAI_*` variables from section 2 and run `bash infra/deploy.sh` again.
 
-## Switching it off after judging
+## Switching it off
 
-After 10 November 2026:
+Once you no longer need the public URL (after 10 November 2026 for the hackathon):
 
 ```bash
 az group delete --name rg-wim-se --yes

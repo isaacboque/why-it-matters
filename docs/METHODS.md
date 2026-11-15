@@ -176,9 +176,9 @@ All shape metrics come from average positions over the window, in and out of pos
 
 | Measure | Result | Target |
 | --- | --- | --- |
-| Formation out of possession | 0.75 | ≥ 0.70 |
-| Formation in possession | 0.92 | ≥ 0.85 |
-| Block type | 0.76 | ≥ 0.65 |
+| Formation out of possession | 0.74 | ≥ 0.70 |
+| Formation in possession | 0.93 | ≥ 0.85 |
+| Block type | 0.74 | ≥ 0.65 |
 
 Run `python -m whyitmatters.eval --seeds 20 --check` to reproduce.
 
