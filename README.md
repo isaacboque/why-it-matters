@@ -20,7 +20,6 @@ Built solo for the Microsoft × Premier League **Inside the Game: Developer Hack
 
 | | |
 | --- | --- |
-| Demo video (under 2 min) | https://youtu.be/pYL-ZfiTMZA |
 | Static demo, no backend | `python -m http.server -d dist/demo`, then open http://localhost:8000 |
 | Full app | `pip install -e ".[api]" && uvicorn whyitmatters.api:app --port 8000` |
 
